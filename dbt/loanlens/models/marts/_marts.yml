@@ -1,0 +1,151 @@
+version: 2
+
+models:
+  - name: mart_credit_score
+    columns:
+      - name: applicant_id
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              to: ref('stg_applicants')
+              field: raw_applicant_id
+      - name: score
+        tests: [not_null]
+      - name: income_stability_score
+        tests: [not_null]
+      - name: emi_burden_score
+        tests: [not_null]
+      - name: bounce_score
+        tests: [not_null]
+      - name: balance_score
+        tests: [not_null]
+      - name: recommendation
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['approve', 'review', 'reject']
+      - name: score_breakdown_json
+        tests: [not_null]
+      - name: computed_at
+        tests: [not_null]
+
+  - name: mart_underwriter_report
+    columns:
+      - name: applicant_id
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              to: ref('mart_credit_score')
+              field: applicant_id
+      - name: avg_monthly_income
+        tests: [not_null]
+      - name: emi_burden_ratio
+        tests: [not_null]
+      - name: bounce_count
+        tests: [not_null]
+      - name: fraud_flags
+        tests: [not_null]
+      - name: risk_segment
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['low', 'medium', 'high']
+
+  - name: mart_risk_segmentation
+    columns:
+      - name: applicant_id
+        tests:
+          - not_null
+          - unique
+          - relationships:
+              to: ref('mart_credit_score')
+              field: applicant_id
+      - name: risk_tier
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['low', 'medium', 'high']
+
+  - name: mart_loan_eligibility
+    columns:
+      - name: applicant_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_applicants')
+              field: raw_applicant_id
+      - name: loan_type_id
+        tests: [not_null]
+      - name: loan_type
+        tests: [not_null]
+      - name: eligible_amount
+        tests: [not_null]
+      - name: applied_amount
+        tests: [not_null]
+      - name: gap_amount
+        tests: [not_null]
+      - name: gap_reason
+        tests: [not_null]
+      - name: decision
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['approve', 'partial', 'reject']
+
+  - name: mart_fraud_flags
+    columns:
+      - name: applicant_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_applicants')
+              field: raw_applicant_id
+      - name: flag_type
+        tests: [not_null]
+      - name: flag_detail
+        tests: [not_null]
+      - name: severity
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['low', 'med', 'high']
+      - name: detected_at
+        tests: [not_null]
+
+  - name: mart_monthly_credit_trend
+    columns:
+      - name: applicant_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_applicants')
+              field: raw_applicant_id
+      - name: month
+        tests: [not_null]
+      - name: score
+        tests: [not_null]
+      - name: trend_direction
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['up', 'down', 'flat']
+
+  - name: mart_pipeline_audit
+    columns:
+      - name: run_id
+        tests: [not_null, unique]
+      - name: dag_name
+        tests: [not_null]
+      - name: status
+        tests: [not_null]
+
+  - name: decisions
+    columns:
+      - name: decision_id
+        tests: [not_null, unique]
+      - name: decision
+        tests:
+          - accepted_values:
+              values: ['approved', 'rejected', 'escalated']

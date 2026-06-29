@@ -1,122 +1,84 @@
-import { useState } from 'react'
-import reactLogo from './assets/react.svg'
-import viteLogo from './assets/vite.svg'
-import heroImg from './assets/hero.png'
-import './App.css'
+// ──────────────────────────────────────────────────────────────────────────────
+// LoanLens — App Entry: React Router + Auth Guards
+// ──────────────────────────────────────────────────────────────────────────────
 
-function App() {
-  const [count, setCount] = useState(0)
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
+import { RequireAuth, RequireRole, roleRedirect } from './utils/routeGuard';
 
-  return (
-    <>
-      <section id="center">
-        <div className="hero">
-          <img src={heroImg} className="base" width="170" height="179" alt="" />
-          <img src={reactLogo} className="framework" alt="React logo" />
-          <img src={viteLogo} className="vite" alt="Vite logo" />
-        </div>
-        <div>
-          <h1>Get started</h1>
-          <p>
-            Edit <code>src/App.tsx</code> and save to test <code>HMR</code>
-          </p>
-        </div>
-        <button
-          type="button"
-          className="counter"
-          onClick={() => setCount((count) => count + 1)}
-        >
-          Count is {count}
-        </button>
-      </section>
+import LoginPage        from './pages/LoginPage';
+import RegisterPage     from './pages/RegisterPage';
+import AdminDashboard   from './pages/AdminDashboard';
+import ManagerDashboard from './pages/ManagerDashboard';
+import AnalystDashboard from './pages/AnalystDashboard';
+import ApplicantDashboard from './pages/ApplicantDashboard';
 
-      <div className="ticks"></div>
-
-      <section id="next-steps">
-        <div id="docs">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#documentation-icon"></use>
-          </svg>
-          <h2>Documentation</h2>
-          <p>Your questions, answered</p>
-          <ul>
-            <li>
-              <a href="https://vite.dev/" target="_blank">
-                <img className="logo" src={viteLogo} alt="" />
-                Explore Vite
-              </a>
-            </li>
-            <li>
-              <a href="https://react.dev/" target="_blank">
-                <img className="button-icon" src={reactLogo} alt="" />
-                Learn more
-              </a>
-            </li>
-          </ul>
-        </div>
-        <div id="social">
-          <svg className="icon" role="presentation" aria-hidden="true">
-            <use href="/icons.svg#social-icon"></use>
-          </svg>
-          <h2>Connect with us</h2>
-          <p>Join the Vite community</p>
-          <ul>
-            <li>
-              <a href="https://github.com/vitejs/vite" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#github-icon"></use>
-                </svg>
-                GitHub
-              </a>
-            </li>
-            <li>
-              <a href="https://chat.vite.dev/" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#discord-icon"></use>
-                </svg>
-                Discord
-              </a>
-            </li>
-            <li>
-              <a href="https://x.com/vite_js" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#x-icon"></use>
-                </svg>
-                X.com
-              </a>
-            </li>
-            <li>
-              <a href="https://bsky.app/profile/vite.dev" target="_blank">
-                <svg
-                  className="button-icon"
-                  role="presentation"
-                  aria-hidden="true"
-                >
-                  <use href="/icons.svg#bluesky-icon"></use>
-                </svg>
-                Bluesky
-              </a>
-            </li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="ticks"></div>
-      <section id="spacer"></section>
-    </>
-  )
+// Root redirect — authenticated users go to their role's home
+function RootRedirect() {
+  const { isAuthenticated, user, isLoading } = useAuth();
+  if (isLoading) return null;
+  if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
+  return <Navigate to={roleRedirect[user.role] ?? '/login'} replace />;
 }
 
-export default App
+export default function App() {
+  return (
+    <BrowserRouter>
+      <AuthProvider>
+        <Routes>
+          {/* Public routes */}
+          <Route path="/login"    element={<LoginPage />} />
+          <Route path="/register" element={<RegisterPage />} />
+
+          {/* Role-protected dashboard routes */}
+          <Route
+            path="/dashboard/admin"
+            element={
+              <RequireAuth>
+                <RequireRole allowedRoles={['admin']}>
+                  <AdminDashboard />
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/dashboard/manager"
+            element={
+              <RequireAuth>
+                <RequireRole allowedRoles={['manager']}>
+                  <ManagerDashboard />
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/dashboard/analyst"
+            element={
+              <RequireAuth>
+                <RequireRole allowedRoles={['analyst']}>
+                  <AnalystDashboard />
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/dashboard/applicant"
+            element={
+              <RequireAuth>
+                <RequireRole allowedRoles={['applicant']}>
+                  <ApplicantDashboard />
+                </RequireRole>
+              </RequireAuth>
+            }
+          />
+
+          {/* Root → smart redirect */}
+          <Route path="/" element={<RootRedirect />} />
+
+          {/* 404 catch-all → root */}
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </AuthProvider>
+    </BrowserRouter>
+  );
+}

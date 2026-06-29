@@ -1,0 +1,125 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install ruff
+          pip install -r backend/requirements.txt
+
+      - name: Ruff lint
+        run: ruff check backend
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: ESLint
+        working-directory: frontend
+        run: npm run lint
+
+  dbt-test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: admin
+          POSTGRES_DB: loanlens_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d loanlens_db"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install backend + dbt
+        run: |
+          pip install --upgrade pip
+          pip install -r backend/requirements.txt
+          pip install dbt-core dbt-postgres
+
+      - name: Run Alembic migrations
+        working-directory: backend
+        env:
+          DB_URL: postgresql+asyncpg://postgres:admin@127.0.0.1:5432/loanlens_db
+          JWT_SECRET: ci-test-secret
+          REFRESH_TOKEN_SECRET: ci-test-refresh-secret
+        run: alembic upgrade head
+
+      - name: Load sample raw data
+        working-directory: backend
+        env:
+          DB_HOST: 127.0.0.1
+          DB_PORT: 5432
+        run: python -m scripts.generate_raw_data --load
+
+      - name: Seed merchant categories + run full dbt pipeline
+        env:
+          DBT_HOST: 127.0.0.1
+          DBT_PORT: 5432
+          DBT_USER: postgres
+          DBT_PASSWORD: admin
+          DBT_DBNAME: loanlens_db
+        run: |
+          dbt seed --project-dir dbt/loanlens --profiles-dir dbt/loanlens --target dev
+          dbt run --project-dir dbt/loanlens --profiles-dir dbt/loanlens --target dev
+          dbt test --project-dir dbt/loanlens --profiles-dir dbt/loanlens --target dev
+
+      - name: BigQuery prod target (skipped when credentials absent)
+        continue-on-error: true
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ secrets.GCP_SA_KEY_PATH }}
+        run: |
+          if [ -z "$GOOGLE_APPLICATION_CREDENTIALS" ] || [ ! -f "$GOOGLE_APPLICATION_CREDENTIALS" ]; then
+            echo "BigQuery credentials absent — skipping prod target"
+            exit 0
+          fi
+          dbt debug --project-dir dbt/loanlens --profiles-dir dbt/loanlens --target prod
+
+  docker-build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build backend image
+        run: docker build -t loanlens-backend ./backend
+
+      - name: Build frontend image
+        run: docker build -t loanlens-frontend ./frontend
+
+      - name: Validate docker compose config
+        run: docker compose config

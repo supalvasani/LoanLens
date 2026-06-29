@@ -1,0 +1,8 @@
+version: 2
+
+sources:
+  - name: app
+    schema: public
+    tables:
+      - name: loan_type_config
+      - name: decisions

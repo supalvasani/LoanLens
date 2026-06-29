@@ -1,0 +1,51 @@
+version: 2
+
+models:
+  - name: stg_applicants
+    description: Cleaned applicant records from raw layer
+    columns:
+      - name: raw_applicant_id
+        tests: [not_null, unique]
+      - name: applicant_ref
+        tests: [not_null, unique]
+      - name: monthly_income_declared
+        tests: [not_null]
+
+  - name: stg_transactions
+    description: Cleaned bank transactions from raw layer
+    columns:
+      - name: raw_id
+        tests: [not_null, unique]
+      - name: applicant_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_applicants')
+              field: raw_applicant_id
+      - name: txn_date
+        tests: [not_null]
+      - name: amount
+        tests: [not_null]
+      - name: txn_type
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['credit', 'debit']
+
+  - name: stg_merchant_categories
+    description: Merchant keyword to category mapping
+    columns:
+      - name: keyword
+        tests: [not_null, unique]
+      - name: category
+        tests: [not_null]
+
+  - name: stg_rbi_rates
+    description: RBI reference rates dimension
+    columns:
+      - name: rate_id
+        tests: [not_null, unique]
+      - name: rate_type
+        tests: [not_null]
+      - name: rate_value
+        tests: [not_null]

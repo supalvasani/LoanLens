@@ -1,0 +1,11 @@
+version: 2
+
+sources:
+  - name: raw
+    schema: public
+    tables:
+      - name: raw_applicants
+      - name: raw_transactions
+      - name: raw_loan_applications
+      - name: stg_rbi_rates
+      - name: mart_pipeline_audit

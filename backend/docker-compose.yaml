@@ -1,0 +1,27 @@
+# Deprecated — use the root docker-compose.yml instead.
+# This file is kept for backwards compatibility only.
+#
+# From repo root: docker compose up -d postgres
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: loanlens_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: loanlens_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d loanlens_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  pgdata:

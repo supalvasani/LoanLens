@@ -1,0 +1,20 @@
+loanlens:
+  target: dev
+  outputs:
+    dev:
+      type: postgres
+      host: "{{ env_var('DBT_HOST', '127.0.0.1') }}"
+      port: "{{ env_var('DBT_PORT', '5432') | int }}"
+      user: "{{ env_var('DBT_USER', 'postgres') }}"
+      password: "{{ env_var('DBT_PASSWORD', 'admin') }}"
+      dbname: "{{ env_var('DBT_DBNAME', 'loanlens_db') }}"
+      schema: public
+      threads: 4
+    prod:
+      type: bigquery
+      method: service-account
+      project: "{{ env_var('DBT_BQ_PROJECT', 'loanlens-prod') }}"
+      dataset: "{{ env_var('DBT_BQ_DATASET', 'loanlens_marts') }}"
+      keyfile: "{{ env_var('DBT_BQ_KEYFILE', '/tmp/missing-bq-key.json') }}"
+      threads: 4
+      location: asia-south1

@@ -1,0 +1,21 @@
+keyword,category,is_essential
+SALARY,income,false
+EMI,loan_obligation,true
+UPI,discretionary,false
+Swiggy,food,false
+Zomato,food,false
+Amazon Pay,shopping,false
+Flipkart,shopping,false
+BESCOM,utilities,true
+Airtel,utilities,true
+ATM CASH,cash,false
+ECS RETURN,bounce,true
+IRCTC,travel,false
+MakeMyTrip,travel,false
+DMart,groceries,true
+BigBasket,groceries,true
+JioMart,groceries,true
+PhonePe,upi,false
+FASTag,transport,true
+Indane Gas,utilities,true
+Municipal Water,utilities,true

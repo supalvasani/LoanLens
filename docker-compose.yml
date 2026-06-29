@@ -1,0 +1,167 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: loanlens_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: loanlens_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backend/docker/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d loanlens_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 15
+
+  redis:
+    image: redis:latest
+    container_name: loanlens_redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  airflow-init:
+    image: apache/airflow:latest
+    container_name: loanlens_airflow_init
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment: &airflow-env
+      AIRFLOW__CORE__EXECUTOR: CeleryExecutor
+      AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://postgres:admin@postgres:5432/loanlens_db
+      AIRFLOW__CELERY__RESULT_BACKEND: db+postgresql://postgres:admin@postgres:5432/loanlens_db
+      AIRFLOW__CELERY__BROKER_URL: redis://redis:6379/0
+      AIRFLOW__CORE__LOAD_EXAMPLES: "False"
+      AIRFLOW__CORE__DAGS_FOLDER: /opt/airflow/dags
+      _AIRFLOW_WWW_USER_USERNAME: admin
+      _AIRFLOW_WWW_USER_PASSWORD: admin
+      _PIP_ADDITIONAL_REQUIREMENTS: dbt-core dbt-postgres psycopg2-binary faker
+    volumes: &airflow-volumes
+      - airflow_logs:/opt/airflow/logs
+      - ./backend/airflow/dags:/opt/airflow/dags
+      - ./backend/data:/opt/airflow/data
+      - ./dbt:/opt/airflow/dbt
+    command: >
+      bash -c "airflow db migrate &&
+      airflow users create --role Admin --username admin --password admin
+      --firstname LoanLens --lastname Admin --email admin@loanlens.in || true"
+    restart: "no"
+
+  airflow-webserver:
+    image: apache/airflow:latest
+    container_name: loanlens_airflow_webserver
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment:
+      <<: *airflow-env
+      AIRFLOW__WEBSERVER__EXPOSE_CONFIG: "True"
+    command: webserver
+    ports:
+      - "8080:8080"
+    volumes: *airflow-volumes
+
+  airflow-scheduler:
+    image: apache/airflow:latest
+    container_name: loanlens_airflow_scheduler
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment: *airflow-env
+    command: scheduler
+    volumes: *airflow-volumes
+
+  airflow-worker:
+    image: apache/airflow:latest
+    container_name: loanlens_airflow_worker
+    restart: always
+    depends_on:
+      airflow-init:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    environment: *airflow-env
+    command: celery worker
+    volumes: *airflow-volumes
+
+  fastapi:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: loanlens_fastapi
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - ./backend/.env
+    environment:
+      DB_URL: postgresql+asyncpg://postgres:admin@postgres:5432/loanlens_db
+      CORS_ORIGINS: http://localhost:5173
+    command: >
+      bash -c "alembic upgrade head &&
+      python -m scripts.seed_users &&
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./backend/logs:/app/logs
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: loanlens_frontend
+    restart: always
+    depends_on:
+      - fastapi
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    command: npm run dev -- --host 0.0.0.0 --port 5173
+
+  metabase:
+    image: metabase/metabase:latest
+    container_name: loanlens_metabase
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      MB_DB_TYPE: postgres
+      MB_DB_DBNAME: loanlens_db
+      MB_DB_PORT: 5432
+      MB_DB_USER: postgres
+      MB_DB_PASS: admin
+      MB_DB_HOST: postgres
+    ports:
+      - "3000:3000"
+    volumes:
+      - metabase_data:/metabase-data
+
+volumes:
+  pgdata:
+  airflow_logs:
+  metabase_data:
