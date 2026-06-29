@@ -1,130 +1,87 @@
-// ──────────────────────────────────────────────────────────────────────────────
-// LoanLens — Dashboard Shell (Sidebar + Topbar layout)
-// ──────────────────────────────────────────────────────────────────────────────
-
 import { type ReactNode } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import type { Role } from '../types/auth';
 
-// ── Nav item definitions per role ────────────────────────────────────────────
-
-interface NavItem {
-  icon: string;
-  label: string;
-  key: string;
-}
-
-const navByRole: Record<Role, NavItem[]> = {
+const navByRole: Record<Role, { icon: string; label: string; path: string }[]> = {
   admin: [
-    { icon: '⬡', label: 'Overview',       key: 'overview' },
-    { icon: '👥', label: 'Users',          key: 'users' },
-    { icon: '📋', label: 'Applications',   key: 'applications' },
-    { icon: '⚖️', label: 'Decisions',      key: 'decisions' },
-    { icon: '📊', label: 'Reports',        key: 'reports' },
-    { icon: '⚙️', label: 'System Config',  key: 'config' },
-    { icon: '📜', label: 'Audit Logs',     key: 'audit' },
+    { icon: '◈', label: 'Dashboard',    path: '/admin/dashboard' },
+    { icon: '◉', label: 'Users',        path: '/admin/users' },
+    { icon: '◎', label: 'Applications', path: '/admin/applications' },
+    { icon: '◇', label: 'Config',       path: '/admin/config' },
+    { icon: '◈', label: 'Audit Logs',   path: '/admin/audit' },
+    { icon: '◉', label: 'Pipeline',     path: '/admin/pipeline' },
   ],
   manager: [
-    { icon: '⬡',  label: 'Overview',       key: 'overview' },
-    { icon: '🚨',  label: 'Escalations',    key: 'escalations' },
-    { icon: '📋',  label: 'Pipeline',       key: 'pipeline' },
-    { icon: '📈',  label: 'Portfolio',      key: 'portfolio' },
-    { icon: '🏦',  label: 'Branch Stats',   key: 'branch' },
+    { icon: '◈', label: 'Dashboard',   path: '/manager/dashboard' },
+    { icon: '◉', label: 'Escalations', path: '/manager/queue' },
+    { icon: '◎', label: 'Portfolio',   path: '/manager/portfolio' },
+    { icon: '◇', label: 'Thresholds',  path: '/manager/config' },
   ],
   analyst: [
-    { icon: '⬡',  label: 'Overview',       key: 'overview' },
-    { icon: '📥',  label: 'Review Queue',   key: 'queue' },
-    { icon: '🔬',  label: 'Assessments',    key: 'assessments' },
-    { icon: '📊',  label: 'Risk Analysis',  key: 'risk' },
-    { icon: '✅',  label: 'My Decisions',   key: 'decisions' },
+    { icon: '◈', label: 'Dashboard',     path: '/analyst/dashboard' },
+    { icon: '◉', label: 'Review Queue',  path: '/analyst/queue' },
+    { icon: '◎', label: 'LoanBot',       path: '/analyst/chatbot' },
   ],
   applicant: [
-    { icon: '⬡',  label: 'My Dashboard',   key: 'overview' },
-    { icon: '📝',  label: 'Apply Now',      key: 'apply' },
-    { icon: '📋',  label: 'My Applications',key: 'applications' },
-    { icon: '💳',  label: 'Credit Score',   key: 'credit' },
-    { icon: '📄',  label: 'Documents',      key: 'documents' },
+    { icon: '◈', label: 'My Dashboard', path: '/portal/dashboard' },
+    { icon: '◉', label: 'Apply Now',    path: '/portal/apply' },
+    { icon: '◎', label: 'Credit Score', path: '/portal/score' },
+    { icon: '◇', label: 'Eligibility',  path: '/portal/eligibility' },
+    { icon: '◈', label: 'Support',      path: '/portal/chatbot' },
   ],
-};
-
-const roleBadgeClass: Record<Role, string> = {
-  admin:     'badge badge-admin',
-  manager:   'badge badge-manager',
-  analyst:   'badge badge-analyst',
-  applicant: 'badge badge-applicant',
 };
 
 const roleLabel: Record<Role, string> = {
-  admin:     'Admin',
+  admin:     'Administrator',
   manager:   'Bank Manager',
   analyst:   'Credit Analyst',
   applicant: 'Applicant',
 };
 
-// ── Sidebar ───────────────────────────────────────────────────────────────────
-
-interface SidebarProps {
-  activeKey: string;
-  onNavChange: (key: string) => void;
-}
-
-function Sidebar({ activeKey, onNavChange }: SidebarProps) {
+function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const role = (user?.role ?? 'applicant') as Role;
-  const navItems = navByRole[role] ?? [];
+  const items = navByRole[role] ?? [];
   const initials = user?.name
     ? user.name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
     : '??';
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login', { replace: true });
-  };
-
   return (
     <aside className="sidebar">
-      {/* Logo */}
-      <div className="sidebar-logo">
-        <div className="sidebar-logo-icon">🏦</div>
-        <span className="sidebar-logo-text">LoanLens</span>
+      <div className="sidebar-brand">
+        <div className="sidebar-brand-mark">L</div>
+        <span className="sidebar-brand-name">LoanLens</span>
       </div>
 
-      {/* Nav */}
       <nav className="sidebar-nav">
-        <div className="sidebar-section-label">Menu</div>
-        {navItems.map((item) => (
-          <button
-            key={item.key}
-            className={`nav-item ${activeKey === item.key ? 'active' : ''}`}
-            onClick={() => onNavChange(item.key)}
-            type="button"
+        <div className="nav-label">Menu</div>
+        {items.map((item) => (
+          <Link
+            key={item.path}
+            to={item.path}
+            className={`nav-item${location.pathname.startsWith(item.path) ? ' active' : ''}`}
           >
-            <span className="nav-icon">{item.icon}</span>
-            <span>{item.label}</span>
-          </button>
+            <span className="nav-item-icon">{item.icon}</span>
+            {item.label}
+          </Link>
         ))}
       </nav>
 
-      {/* User footer */}
       <div className="sidebar-footer">
-        <div className="user-card">
+        <div className="user-tile">
           <div className="user-avatar">{initials}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
-            <div className="user-name" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-              {user?.name}
-            </div>
-            <div className={roleBadgeClass[role]} style={{ marginTop: 3 }}>
-              {roleLabel[role]}
-            </div>
+            <div className="user-name">{user?.name ?? '—'}</div>
+            <div className="user-role">{roleLabel[role]}</div>
           </div>
           <button
             className="btn btn-ghost btn-sm"
-            onClick={handleLogout}
-            title="Logout"
-            type="button"
-            style={{ padding: '5px 8px', flexShrink: 0 }}
+            title="Sign out"
+            style={{ padding: '4px 8px', flexShrink: 0 }}
+            onClick={() => { logout(); navigate('/login', { replace: true }); }}
           >
             ⏻
           </button>
@@ -134,55 +91,26 @@ function Sidebar({ activeKey, onNavChange }: SidebarProps) {
   );
 }
 
-// ── Topbar ────────────────────────────────────────────────────────────────────
-
-interface TopbarProps {
+interface ShellProps {
+  children: ReactNode;
   title: string;
   subtitle?: string;
   actions?: ReactNode;
 }
 
-function Topbar({ title, subtitle, actions }: TopbarProps) {
+export function DashboardShell({ children, title, subtitle, actions }: ShellProps) {
   return (
-    <header className="topbar">
-      <div>
-        <div className="topbar-title">{title}</div>
-        {subtitle && (
-          <div className="text-muted text-xs mt-1">{subtitle}</div>
-        )}
-      </div>
-      {actions && <div className="flex items-center gap-3">{actions}</div>}
-    </header>
-  );
-}
-
-// ── DashboardShell ────────────────────────────────────────────────────────────
-
-interface DashboardShellProps {
-  children: ReactNode;
-  title: string;
-  subtitle?: string;
-  topbarActions?: ReactNode;
-  activeNav?: string;
-  onNavChange?: (key: string) => void;
-}
-
-export function DashboardShell({
-  children,
-  title,
-  subtitle,
-  topbarActions,
-  activeNav = 'overview',
-  onNavChange,
-}: DashboardShellProps) {
-  return (
-    <div className="dashboard-layout">
-      <Sidebar activeKey={activeNav} onNavChange={onNavChange ?? (() => {})} />
-      <div className="dashboard-main">
-        <Topbar title={title} subtitle={subtitle} actions={topbarActions} />
-        <main className="dashboard-content animate-fadeIn">
-          {children}
-        </main>
+    <div className="layout">
+      <Sidebar />
+      <div className="dash-main">
+        <header className="topbar">
+          <div>
+            <div className="topbar-title">{title}</div>
+            {subtitle && <div className="topbar-sub">{subtitle}</div>}
+          </div>
+          {actions && <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>{actions}</div>}
+        </header>
+        <main className="page-body fade-up">{children}</main>
       </div>
     </div>
   );

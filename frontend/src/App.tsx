@@ -1,19 +1,27 @@
-// ──────────────────────────────────────────────────────────────────────────────
-// LoanLens — App Entry: React Router + Auth Guards
-// ──────────────────────────────────────────────────────────────────────────────
-
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RequireAuth, RequireRole, roleRedirect } from './utils/routeGuard';
 
 import LoginPage        from './pages/LoginPage';
 import RegisterPage     from './pages/RegisterPage';
-import AdminDashboard   from './pages/AdminDashboard';
-import ManagerDashboard from './pages/ManagerDashboard';
-import AnalystDashboard from './pages/AnalystDashboard';
-import ApplicantDashboard from './pages/ApplicantDashboard';
 
-// Root redirect — authenticated users go to their role's home
+// Portal (Applicant)
+import PortalDashboard from './pages/portal/Dashboard';
+import PortalApply     from './pages/portal/Apply';
+import PortalScore     from './pages/portal/Score';
+import PortalEligibility from './pages/portal/Eligibility';
+
+// Admin
+import AdminDashboard from './pages/admin/Dashboard';
+
+// Manager
+import ManagerDashboard from './pages/manager/Dashboard';
+import ManagerPortfolio from './pages/manager/Portfolio';
+
+// Analyst
+import AnalystDashboard from './pages/analyst/Dashboard';
+
+// Root redirect
 function RootRedirect() {
   const { isAuthenticated, user, isLoading } = useAuth();
   if (isLoading) return null;
@@ -26,56 +34,37 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          {/* Public routes */}
+          {/* Public */}
           <Route path="/login"    element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
 
-          {/* Role-protected dashboard routes */}
-          <Route
-            path="/dashboard/admin"
-            element={
-              <RequireAuth>
-                <RequireRole allowedRoles={['admin']}>
-                  <AdminDashboard />
-                </RequireRole>
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/dashboard/manager"
-            element={
-              <RequireAuth>
-                <RequireRole allowedRoles={['manager']}>
-                  <ManagerDashboard />
-                </RequireRole>
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/dashboard/analyst"
-            element={
-              <RequireAuth>
-                <RequireRole allowedRoles={['analyst']}>
-                  <AnalystDashboard />
-                </RequireRole>
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/dashboard/applicant"
-            element={
-              <RequireAuth>
-                <RequireRole allowedRoles={['applicant']}>
-                  <ApplicantDashboard />
-                </RequireRole>
-              </RequireAuth>
-            }
-          />
+          {/* Portal (Applicant) */}
+          <Route path="/portal/dashboard" element={<RequireAuth><RequireRole allowedRoles={['applicant']}><PortalDashboard /></RequireRole></RequireAuth>} />
+          <Route path="/portal/apply"     element={<RequireAuth><RequireRole allowedRoles={['applicant']}><PortalApply /></RequireRole></RequireAuth>} />
+          <Route path="/portal/score"     element={<RequireAuth><RequireRole allowedRoles={['applicant']}><PortalScore /></RequireRole></RequireAuth>} />
+          <Route path="/portal/eligibility" element={<RequireAuth><RequireRole allowedRoles={['applicant']}><PortalEligibility /></RequireRole></RequireAuth>} />
+          
+          {/* Support Chat Placeholder */}
+          <Route path="/portal/chatbot" element={<RequireAuth><RequireRole allowedRoles={['applicant']}><PortalDashboard /></RequireRole></RequireAuth>} />
 
-          {/* Root → smart redirect */}
+          {/* Admin */}
+          <Route path="/admin/dashboard" element={<RequireAuth><RequireRole allowedRoles={['admin']}><AdminDashboard /></RequireRole></RequireAuth>} />
+          {/* Placeholders for admin sub-routes to avoid 404s for now */}
+          <Route path="/admin/*" element={<RequireAuth><RequireRole allowedRoles={['admin']}><AdminDashboard /></RequireRole></RequireAuth>} />
+
+          {/* Manager */}
+          <Route path="/manager/dashboard" element={<RequireAuth><RequireRole allowedRoles={['manager']}><ManagerDashboard /></RequireRole></RequireAuth>} />
+          <Route path="/manager/portfolio" element={<RequireAuth><RequireRole allowedRoles={['manager']}><ManagerPortfolio /></RequireRole></RequireAuth>} />
+          {/* Placeholders for manager sub-routes */}
+          <Route path="/manager/*" element={<RequireAuth><RequireRole allowedRoles={['manager']}><ManagerDashboard /></RequireRole></RequireAuth>} />
+
+          {/* Analyst */}
+          <Route path="/analyst/dashboard" element={<RequireAuth><RequireRole allowedRoles={['analyst']}><AnalystDashboard /></RequireRole></RequireAuth>} />
+          {/* Placeholders for analyst sub-routes */}
+          <Route path="/analyst/*" element={<RequireAuth><RequireRole allowedRoles={['analyst']}><AnalystDashboard /></RequireRole></RequireAuth>} />
+
+          {/* Root */}
           <Route path="/" element={<RootRedirect />} />
-
-          {/* 404 catch-all → root */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>

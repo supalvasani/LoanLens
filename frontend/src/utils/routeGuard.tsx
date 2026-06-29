@@ -9,10 +9,10 @@ import { useAuth } from '../contexts/AuthContext';
 
 // Map each role to its home dashboard
 export const roleRedirect: Record<Role, string> = {
-  admin:     '/dashboard/admin',
-  manager:   '/dashboard/manager',
-  analyst:   '/dashboard/analyst',
-  applicant: '/dashboard/applicant',
+  admin:     '/admin/dashboard',
+  manager:   '/manager/dashboard',
+  analyst:   '/analyst/dashboard',
+  applicant: '/portal/dashboard',
 };
 
 // ── RequireAuth ───────────────────────────────────────────────────────────────

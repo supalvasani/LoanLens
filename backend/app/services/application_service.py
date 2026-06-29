@@ -1,0 +1,171 @@
+"""Service for loan application submission and retrieval.
+
+All business logic lives here — routes are HTTP-only.
+Repository layer handles all DB queries.
+"""
+from __future__ import annotations
+
+from decimal import Decimal
+
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.logger import logger
+from app.enums import ApplicationStatusEnum, RoleEnum
+from app.exceptions.domain import InsufficientPermissionsException, ResourceNotFoundException
+from app.models.user import User
+from app.repositories.application_repository import ApplicationRepository
+from app.repositories.audit_log_repository import AuditLogRepository
+from app.repositories.decision_repository import DecisionRepository
+from app.repositories.mart_repository import MartRepository
+from app.schemas.loan import (
+    ApplicationWithMartDataResponse,
+    CreditScoreData,
+    DecisionResponse,
+    FraudFlagData,
+    LoanApplicationRequest,
+    LoanApplicationResponse,
+    LoanEligibilityData,
+    MonthlyTrendPoint,
+    UnderwriterReportData,
+)
+
+
+class ApplicationService:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+        self.app_repo = ApplicationRepository(session)
+        self.audit_repo = AuditLogRepository(session)
+        self.mart_repo = MartRepository(session)
+        self.decision_repo = DecisionRepository(session)
+
+    # ── Submit Application ────────────────────────────────────────────────────
+
+    async def create_application(
+        self,
+        current_user: User,
+        payload: LoanApplicationRequest,
+    ) -> LoanApplicationResponse:
+        """Applicant submits a loan application.
+
+        Only applicants may call this.  applicant_id is sourced from JWT
+        (current_user.user_id), never from the request body.
+        """
+        if current_user.role != RoleEnum.applicant:
+            raise InsufficientPermissionsException()
+
+        application = await self.app_repo.create(
+            user_id=current_user.user_id,
+            loan_type=payload.loan_type,
+            amount_requested=payload.amount_requested,
+            purpose=payload.purpose,
+        )
+
+        await self.audit_repo.insert(
+            user_id=current_user.user_id,
+            action="application_submitted",
+            target_type="raw_loan_applications",
+            target_id=str(application.application_id),
+            new_value={
+                "loan_type": payload.loan_type.value,
+                "amount_requested": str(payload.amount_requested),
+                "purpose": payload.purpose,
+            },
+        )
+
+        await self.session.commit()
+
+        logger.info(
+            "application_submitted",
+            extra={
+                "user_id": str(current_user.user_id),
+                "application_id": str(application.application_id),
+                "loan_type": payload.loan_type.value,
+                "amount": str(payload.amount_requested),
+            },
+        )
+        return LoanApplicationResponse.model_validate(application)
+
+    # ── List Applications ─────────────────────────────────────────────────────
+
+    async def list_applications(
+        self,
+        current_user: User,
+        status: ApplicationStatusEnum | None = None,
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[LoanApplicationResponse]:
+        """Role-filtered listing:
+        - admin   → all
+        - manager → escalated only
+        - analyst → all non-escalated
+        - applicant → own only
+        """
+        applications = await self.app_repo.get_all(
+            current_user=current_user,
+            status=status,
+            limit=limit,
+            offset=offset,
+        )
+        return [LoanApplicationResponse.model_validate(a) for a in applications]
+
+    # ── Get Single Application (with mart data) ───────────────────────────────
+
+    async def get_application_full(
+        self,
+        application_id: str,
+        current_user: User,
+    ) -> ApplicationWithMartDataResponse:
+        """Returns a full application + all mart data for the applicant.
+
+        Role gates:
+        - applicant can only see their own
+        - manager can only see escalated
+        - analyst can see all non-escalated
+        - admin sees everything
+        """
+        from uuid import UUID
+
+        try:
+            app_uuid = UUID(application_id)
+        except ValueError as exc:
+            raise ResourceNotFoundException("Application", application_id) from exc
+
+        application = await self.app_repo.get_by_id(app_uuid)
+        if application is None:
+            raise ResourceNotFoundException("Application", application_id)
+
+        # Role gate
+        if current_user.role == RoleEnum.applicant:
+            if application.user_id != current_user.user_id:
+                raise InsufficientPermissionsException()
+        elif current_user.role == RoleEnum.manager:
+            if application.status != ApplicationStatusEnum.escalated:
+                raise InsufficientPermissionsException()
+        elif current_user.role == RoleEnum.analyst:
+            if application.status == ApplicationStatusEnum.escalated:
+                raise InsufficientPermissionsException()
+
+        # Resolve applicant_id from raw_applicants (user → applicant mapping)
+        applicant_id = await self.mart_repo.get_applicant_id_for_user(application.user_id)
+
+        # Fetch mart data (all gracefully return None / [] if dbt hasn't run)
+        credit_score_raw = await self.mart_repo.get_credit_score(applicant_id) if applicant_id else None
+        fraud_flags_raw = await self.mart_repo.get_fraud_flags(applicant_id) if applicant_id else []
+        eligibility_raw = await self.mart_repo.get_loan_eligibility(applicant_id) if applicant_id else []
+        underwriter_raw = await self.mart_repo.get_underwriter_report(applicant_id) if applicant_id else None
+        trend_raw = await self.mart_repo.get_monthly_trend(applicant_id) if applicant_id else []
+        risk_tier = await self.mart_repo.get_risk_tier(applicant_id) if applicant_id else None
+
+        # Decision history for this application
+        decision_rows = await self.decision_repo.get_all_for_application(app_uuid)
+
+        return ApplicationWithMartDataResponse(
+            application=LoanApplicationResponse.model_validate(application),
+            credit_score=CreditScoreData(**credit_score_raw) if credit_score_raw else None,
+            fraud_flags=[FraudFlagData(**f) for f in fraud_flags_raw],
+            eligibility=[LoanEligibilityData(**e) for e in eligibility_raw],
+            underwriter_report=UnderwriterReportData(**underwriter_raw) if underwriter_raw else None,
+            monthly_trend=[MonthlyTrendPoint(**t) for t in trend_raw],
+            risk_tier=risk_tier,
+            decisions=[DecisionResponse.model_validate(d) for d in decision_rows],
+        )
