@@ -48,6 +48,7 @@ class MartRepository:
             return dict(row) if row else None
         except ProgrammingError:
             # Table doesn't exist yet (dbt hasn't run)
+            await self.session.rollback()
             return None
 
     # ── Fraud Flags ───────────────────────────────────────────────────────────
@@ -78,6 +79,7 @@ class MartRepository:
             )
             return [dict(r) for r in result.mappings().all()]
         except ProgrammingError:
+            await self.session.rollback()
             return []
 
     async def has_any_fraud_flag(self, applicant_id: uuid.UUID) -> bool:
@@ -120,6 +122,7 @@ class MartRepository:
             )
             return [dict(r) for r in result.mappings().all()]
         except ProgrammingError:
+            await self.session.rollback()
             return []
 
     # ── Underwriter Report ────────────────────────────────────────────────────
@@ -150,6 +153,7 @@ class MartRepository:
             row = result.mappings().first()
             return dict(row) if row else None
         except ProgrammingError:
+            await self.session.rollback()
             return None
 
     # ── Monthly Trend ─────────────────────────────────────────────────────────
@@ -176,6 +180,7 @@ class MartRepository:
             )
             return [dict(r) for r in result.mappings().all()]
         except ProgrammingError:
+            await self.session.rollback()
             return []
 
     # ── Risk Segmentation ─────────────────────────────────────────────────────
@@ -196,6 +201,7 @@ class MartRepository:
             row = result.mappings().first()
             return row["risk_tier"] if row else None
         except ProgrammingError:
+            await self.session.rollback()
             return None
 
     # ── Applicant lookup (raw_applicants) ─────────────────────────────────────
@@ -219,4 +225,5 @@ class MartRepository:
             row = result.mappings().first()
             return uuid.UUID(str(row["raw_applicant_id"])) if row else None
         except ProgrammingError:
+            await self.session.rollback()
             return None

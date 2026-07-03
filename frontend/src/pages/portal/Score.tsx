@@ -3,6 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis,
   Tooltip, CartesianGrid, ReferenceLine,
@@ -69,21 +70,27 @@ function ComponentBar({ c }: { c: ScoreComponent }) {
 }
 
 // ── No data empty state ────────────────────────────────────────────────────────
-function NoDataState() {
+function NoDataState({ onNavigate }: { onNavigate: () => void }) {
   return (
     <div className="card" style={{ textAlign: 'center', padding: '56px 24px' }}>
-      <div style={{ fontSize: 40, marginBottom: 16 }}>📊</div>
+      <div style={{ color: 'var(--ink)', marginBottom: 16, display: 'flex', justifyContent: 'center' }}>
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>
+      </div>
       <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--t1)', marginBottom: 8 }}>No Credit Score Yet</div>
       <div style={{ fontSize: 13, color: 'var(--t3)', maxWidth: 360, margin: '0 auto', lineHeight: 1.65 }}>
         Your credit score is computed after you upload a bank statement and the dbt pipeline runs.
-        Upload your bank statement from the <strong>Apply</strong> page to get started.
+        Upload your bank statement from the <strong>Statements</strong> page to get started.
       </div>
+      <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={onNavigate}>
+        Upload Bank Statement →
+      </button>
     </div>
   );
 }
 
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function PortalScore() {
+  const navigate = useNavigate();
   const [score, setScore]   = useState<CreditScoreData | null>(null);
   const [trend, setTrend]   = useState<CreditTrend | null>(null);
   const [loading, setLoading] = useState(true);
@@ -113,7 +120,12 @@ export default function PortalScore() {
   if (error) {
     return (
       <DashboardShell title="Credit Score">
-        <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>
+        <div className="alert alert-error">
+          <span style={{ display: 'flex', alignItems: 'center' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </span>
+          <span>{error}</span>
+        </div>
       </DashboardShell>
     );
   }
@@ -121,7 +133,7 @@ export default function PortalScore() {
   if (!score?.has_data) {
     return (
       <DashboardShell title="Credit Score" subtitle="Your financial health and scoring metrics">
-        <NoDataState />
+        <NoDataState onNavigate={() => navigate('/portal/statements')} />
       </DashboardShell>
     );
   }
@@ -199,7 +211,7 @@ export default function PortalScore() {
                   contentStyle={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}
                   itemStyle={{ color: 'var(--ink)', fontWeight: 600 }}
                   labelStyle={{ color: 'var(--t3)', fontSize: 11 }}
-                  formatter={(v: number) => [v.toFixed(0), 'Score']}
+                  formatter={(v: any) => [v != null ? Number(v).toFixed(0) : '—', 'Score']}
                 />
                 <Line
                   type="monotone"

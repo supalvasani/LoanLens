@@ -102,7 +102,11 @@ async def get_my_eligibility(
             gap_amount=r.get("gap_amount"),
             gap_reason=r.get("gap_reason"),
             gap_reason_label=GAP_REASON_LABELS.get(r.get("gap_reason") or "", r.get("gap_reason")),
-            decision=r.get("decision"),
+            decision=(
+                "eligible" if r.get("decision") == "approve"
+                else "ineligible" if r.get("decision") == "reject"
+                else r.get("decision")
+            ),
         )
         for r in rows
     ]

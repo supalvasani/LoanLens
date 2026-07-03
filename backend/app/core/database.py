@@ -8,6 +8,11 @@ from app.core.config import settings
 engine = create_async_engine(
     settings.DB_URL,
     echo=settings.APP_ENV == "development",
+    connect_args={
+        "server_settings": {
+            "search_path": "public,public_staging,public_intermediate,public_marts"
+        }
+    },
 )
 
 # Create session factory

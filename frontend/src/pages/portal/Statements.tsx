@@ -77,7 +77,10 @@ export default function PortalStatements() {
       title="Bank Statement Upload"
       subtitle="Upload your bank statement CSV to compute your credit score"
       actions={
-        <button className="btn btn-ghost btn-sm" onClick={downloadSample}>⬇ Sample CSV</button>
+        <button className="btn btn-ghost btn-sm" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }} onClick={downloadSample}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+          Sample CSV
+        </button>
       }
     >
       <div style={{ maxWidth: 640, display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -131,7 +134,9 @@ export default function PortalStatements() {
           >
             {file ? (
               <>
-                <div style={{ fontSize: 36, marginBottom: 10 }}>📄</div>
+                <div style={{ color: 'var(--ok)', marginBottom: 10, display: 'flex', justifyContent: 'center' }}>
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                </div>
                 <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--ok)' }}>{file.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 4 }}>
                   {(file.size / 1024).toFixed(1)} KB
@@ -147,7 +152,9 @@ export default function PortalStatements() {
               </>
             ) : (
               <>
-                <div style={{ fontSize: 36, marginBottom: 12 }}>📂</div>
+                <div style={{ color: 'var(--t2)', marginBottom: 12, display: 'flex', justifyContent: 'center' }}>
+                  <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+                </div>
                 <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--t1)' }}>Drop your CSV here</div>
                 <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 6 }}>or click to browse · Max 5 MB</div>
               </>
@@ -156,7 +163,10 @@ export default function PortalStatements() {
 
           {error && (
             <div className="alert alert-error" style={{ marginTop: 14 }}>
-              <span>⚠</span><span>{error}</span>
+              <span style={{ display: 'flex', alignItems: 'center' }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              </span>
+              <span>{error}</span>
             </div>
           )}
 
@@ -164,9 +174,14 @@ export default function PortalStatements() {
             className="btn btn-primary"
             disabled={!file || uploading}
             onClick={handleUpload}
-            style={{ marginTop: 14, width: '100%' }}
+            style={{ marginTop: 14, width: '100%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}
           >
-            {uploading ? <><span className="spinner" /> Uploading & Processing…</> : '⬆ Upload Statement'}
+            {uploading ? <><span className="spinner" /> Uploading & Processing…</> : (
+              <>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                Upload Statement
+              </>
+            )}
           </button>
         </div>
 
@@ -190,7 +205,9 @@ export default function PortalStatements() {
 
             {result.rows_inserted > 0 && (
               <div className="alert alert-success" style={{ marginBottom: result.errors.length > 0 ? 10 : 0 }}>
-                <span>✓</span>
+                <span style={{ display: 'flex', alignItems: 'center' }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                </span>
                 <span>
                   {result.rows_inserted} transactions imported successfully.
                   Your credit score will be updated the next time the pipeline runs.
@@ -200,7 +217,9 @@ export default function PortalStatements() {
 
             {result.errors.length > 0 && (
               <div className="alert alert-warn">
-                <span>⚠</span>
+                <span style={{ display: 'flex', alignItems: 'center', marginTop: 2 }}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                </span>
                 <div>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{result.errors.length} row(s) had issues:</div>
                   {result.errors.slice(0, 5).map((e, i) => (
@@ -228,7 +247,9 @@ export default function PortalStatements() {
             'Duplicate rows are safely skipped — re-uploads are safe.',
           ].map((tip, i) => (
             <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
-              <span style={{ color: 'var(--ok)', fontSize: 12, flexShrink: 0 }}>✓</span>
+              <span style={{ color: 'var(--ok)', display: 'flex', alignItems: 'center', marginTop: 2, flexShrink: 0 }}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </span>
               <span style={{ fontSize: 12, color: 'var(--t2)', lineHeight: 1.5 }}>{tip}</span>
             </div>
           ))}

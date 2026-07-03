@@ -15,7 +15,7 @@ const STATUS_COLOR: Record<string, { bg: string; color: string; label: string }>
   pending:      { bg: 'rgba(148,163,184,.12)', color: '#64748b', label: 'Pending Review' },
   under_review: { bg: 'rgba(245,158,11,.12)',  color: '#d97706', label: 'Under Review' },
   escalated:    { bg: 'rgba(245,158,11,.12)',  color: '#d97706', label: 'Escalated' },
-  approved:     { bg: 'rgba(34,197,94,.12)',   color: '#16a34a', label: 'Approved ✓' },
+  approved:     { bg: 'rgba(34,197,94,.12)',   color: '#16a34a', label: 'Approved' },
   rejected:     { bg: 'rgba(239,68,68,.12)',   color: '#dc2626', label: 'Rejected' },
 };
 
@@ -30,7 +30,7 @@ const LOAN_LABELS: Record<string, string> = {
   two_wheeler_loan: 'Two-Wheeler Loan',
 };
 
-function QuickCard({ icon, label, path, desc }: { icon: string; label: string; path: string; desc: string }) {
+function QuickCard({ icon, label, path, desc }: { icon: React.ReactNode; label: string; path: string; desc: string }) {
   const navigate = useNavigate();
   return (
     <div
@@ -40,7 +40,7 @@ function QuickCard({ icon, label, path, desc }: { icon: string; label: string; p
       onMouseLeave={e => (e.currentTarget.style.boxShadow = 'var(--sh)')}
       onClick={() => navigate(path)}
     >
-      <div style={{ fontSize: 24, marginBottom: 10 }}>{icon}</div>
+      <div style={{ color: 'var(--ink)', marginBottom: 10, display: 'flex', alignItems: 'center' }}>{icon}</div>
       <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--t1)', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 12, color: 'var(--t3)' }}>{desc}</div>
     </div>
@@ -144,7 +144,7 @@ export default function PortalDashboard() {
                     {LOAN_LABELS[latestApp.loan_type] ?? latestApp.loan_type.replace(/_/g, ' ')}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--t2)' }}>
-                    ₹{Number(latestApp.amount_requested).toLocaleString('en-IN')} · {latestApp.purpose.slice(0, 80)}{latestApp.purpose.length > 80 ? '…' : ''}
+                    ₹{Number(latestApp.amount_requested).toLocaleString('en-IN')} · {(latestApp.purpose ?? '').slice(0, 80)}{(latestApp.purpose ?? '').length > 80 ? '…' : ''}
                   </div>
                   <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4 }}>
                     Submitted {new Date(latestApp.submitted_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })}
@@ -220,10 +220,30 @@ export default function PortalDashboard() {
           <div>
             <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--t3)', marginBottom: 12 }}>Quick Actions</div>
             <div className="grid-4">
-              <QuickCard icon="📋" label="Apply for Loan"    path="/portal/apply"       desc="Submit a new application" />
-              <QuickCard icon="📊" label="Credit Score"      path="/portal/score"       desc="View your score breakdown" />
-              <QuickCard icon="✅" label="Loan Eligibility"  path="/portal/eligibility" desc="See what you qualify for" />
-              <QuickCard icon="💬" label="Ask LoanBot"       path="/portal/chatbot"     desc="Get personalised guidance" />
+              <QuickCard
+                icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line></svg>}
+                label="Apply for Loan"
+                path="/portal/apply"
+                desc="Submit a new application"
+              />
+              <QuickCard
+                icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="20" x2="18" y2="10"></line><line x1="12" y1="20" x2="12" y2="4"></line><line x1="6" y1="20" x2="6" y2="14"></line></svg>}
+                label="Credit Score"
+                path="/portal/score"
+                desc="View your score breakdown"
+              />
+              <QuickCard
+                icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>}
+                label="Loan Eligibility"
+                path="/portal/eligibility"
+                desc="See what you qualify for"
+              />
+              <QuickCard
+                icon={<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>}
+                label="Ask LoanBot"
+                path="/portal/chatbot"
+                desc="Get personalised guidance"
+              />
             </div>
           </div>
 

@@ -8,27 +8,45 @@ import { DashboardShell } from '../../components/DashboardShell';
 import { loanService } from '../../services/loanService';
 import type { EligibilityData, EligibilityItem } from '../../services/loanService';
 
-const LOAN_ICONS: Record<string, string> = {
-  personal_loan:    '👤',
-  home_loan:        '🏠',
-  business_loan:    '🏢',
-  vehicle_loan:     '🚗',
-  auto_loan:        '🚗',
-  education_loan:   '🎓',
-  two_wheeler_loan: '🛵',
-  gold_loan:        '🥇',
+const LOAN_ICONS: Record<string, React.ReactNode> = {
+  personal_loan: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>
+  ),
+  home_loan: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path><polyline points="9 22 9 12 15 12 15 22"></polyline></svg>
+  ),
+  business_loan: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2" ry="2"></rect><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"></path></svg>
+  ),
+  vehicle_loan: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+  ),
+  auto_loan: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="3" width="15" height="13"></rect><polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon><circle cx="5.5" cy="18.5" r="2.5"></circle><circle cx="18.5" cy="18.5" r="2.5"></circle></svg>
+  ),
+  education_loan: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 10l-10-5-10 5 10 5 10-5z"></path><path d="M6 12v5c0 2 2.5 3 6 3s6-1 6-3v-5"></path></svg>
+  ),
+  two_wheeler_loan: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="5" cy="18" r="3"></circle><circle cx="19" cy="18" r="3"></circle><path d="M12 18V8h7M5 18h14M12 8l-4-4H5"></path></svg>
+  ),
+  gold_loan: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="7"></circle><polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline></svg>
+  ),
 };
 
 const DECISION_STYLE: Record<string, { bg: string; color: string; label: string }> = {
-  eligible:   { bg: 'rgba(34,197,94,.1)',  color: '#16a34a', label: '✓ Eligible' },
-  partial:    { bg: 'rgba(245,158,11,.1)', color: '#d97706', label: '⚡ Partial' },
-  ineligible: { bg: 'rgba(239,68,68,.1)',  color: '#dc2626', label: '✗ Not Eligible' },
+  eligible:   { bg: 'rgba(34,197,94,.1)',  color: '#16a34a', label: 'Eligible' },
+  partial:    { bg: 'rgba(245,158,11,.1)', color: '#d97706', label: 'Partial' },
+  ineligible: { bg: 'rgba(239,68,68,.1)',  color: '#dc2626', label: 'Not Eligible' },
 };
 
 function EligibilityCard({ item, onApply }: { item: EligibilityItem; onApply: () => void }) {
   const decision = item.decision ?? 'ineligible';
   const ds = DECISION_STYLE[decision] ?? DECISION_STYLE.ineligible;
-  const icon = LOAN_ICONS[item.loan_type] ?? '💰';
+  const icon = LOAN_ICONS[item.loan_type] ?? (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+  );
   const isEligible = decision === 'eligible' || decision === 'partial';
 
   return (
@@ -36,7 +54,7 @@ function EligibilityCard({ item, onApply }: { item: EligibilityItem; onApply: ()
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ fontSize: 24 }}>{icon}</div>
+          <div style={{ color: 'var(--ink)', display: 'flex', alignItems: 'center' }}>{icon}</div>
           <div>
             <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--t1)' }}>{item.loan_type_label}</div>
           </div>
@@ -73,7 +91,9 @@ function EligibilityCard({ item, onApply }: { item: EligibilityItem; onApply: ()
       {/* Gap reason */}
       {!isEligible && item.gap_reason_label && (
         <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '10px 12px', background: 'rgba(239,68,68,.06)', borderRadius: 6, border: '1px solid rgba(239,68,68,.15)' }}>
-          <span style={{ fontSize: 14, flexShrink: 0 }}>⚠</span>
+          <span style={{ color: 'var(--bad)', display: 'flex', alignItems: 'center', marginTop: 1 }}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </span>
           <span style={{ fontSize: 12, color: 'var(--bad)', lineHeight: 1.55 }}>{item.gap_reason_label}</span>
         </div>
       )}
@@ -129,18 +149,25 @@ export default function PortalEligibility() {
       )}
 
       {error && (
-        <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>
+        <div className="alert alert-error">
+          <span style={{ display: 'flex', alignItems: 'center' }}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+          </span>
+          <span>{error}</span>
+        </div>
       )}
 
       {!loading && !error && !data?.has_data && (
         <div className="card" style={{ textAlign: 'center', padding: '56px 24px' }}>
-          <div style={{ fontSize: 40, marginBottom: 16 }}>✅</div>
+          <div style={{ color: 'var(--ink)', marginBottom: 16, display: 'flex', justifyContent: 'center' }}>
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          </div>
           <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--t1)', marginBottom: 8 }}>No Eligibility Data Yet</div>
           <div style={{ fontSize: 13, color: 'var(--t3)', maxWidth: 380, margin: '0 auto', lineHeight: 1.65 }}>
             Eligibility is computed by our dbt pipeline after you upload a bank statement.
-            Upload yours from the Apply page to see what you qualify for.
+            Upload yours from the Statements page to see what you qualify for.
           </div>
-          <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={() => navigate('/portal/apply')}>
+          <button className="btn btn-primary" style={{ marginTop: 20 }} onClick={() => navigate('/portal/statements')}>
             Upload Bank Statement →
           </button>
         </div>

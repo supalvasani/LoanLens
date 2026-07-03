@@ -111,7 +111,9 @@ export default function PortalApply() {
         <div style={{ maxWidth: 560 }}>
           <div className="card">
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20 }}>
-              <div style={{ width: 44, height: 44, borderRadius: 8, background: 'rgba(34,197,94,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 22 }}>✓</div>
+              <div style={{ width: 44, height: 44, borderRadius: 8, background: 'rgba(34,197,94,.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ok)' }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              </div>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--ok)' }}>Application Submitted!</div>
                 <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 2 }}>
@@ -122,7 +124,13 @@ export default function PortalApply() {
 
             {uploadResult && (
               <div className={`alert ${uploadResult.rows_inserted > 0 ? 'alert-success' : 'alert-warn'}`} style={{ marginBottom: 16 }}>
-                <span>{uploadResult.rows_inserted > 0 ? '✓' : '⚠'}</span>
+                <span style={{ display: 'flex', alignItems: 'center' }}>
+                  {uploadResult.rows_inserted > 0 ? (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                  ) : (
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+                  )}
+                </span>
                 <div>
                   {uploadResult.rows_inserted > 0
                     ? `Bank statement uploaded: ${uploadResult.rows_inserted} transactions imported.`
@@ -136,9 +144,14 @@ export default function PortalApply() {
               </div>
             )}
 
-            <div style={{ background: 'var(--bg)', borderRadius: 6, padding: '14px 16px', marginBottom: 20, fontSize: 13, color: 'var(--t2)', lineHeight: 1.6 }}>
-              ⏳ Your application is <strong>pending review</strong>. Our credit analysts will review it within 1–2 business days.
-              You can track its status on your dashboard.
+            <div style={{ background: 'var(--bg)', borderRadius: 6, padding: '14px 16px', marginBottom: 20, fontSize: 13, color: 'var(--t2)', lineHeight: 1.6, display: 'flex', gap: 10, alignItems: 'flex-start' }}>
+              <span style={{ color: 'var(--t3)', display: 'flex', alignItems: 'center', marginTop: 3 }}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+              </span>
+              <div>
+                Your application is <strong>pending review</strong>. Our credit analysts will review it within 1–2 business days.
+                You can track its status on your dashboard.
+              </div>
             </div>
 
             <div style={{ display: 'flex', gap: 10 }}>
@@ -162,7 +175,10 @@ export default function PortalApply() {
       <div style={{ maxWidth: 600 }}>
         {apiError && (
           <div className="alert alert-error" style={{ marginBottom: 16 }}>
-            <span>⚠</span><span>{apiError}</span>
+            <span style={{ display: 'flex', alignItems: 'center' }}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+            </span>
+            <span>{apiError}</span>
           </div>
         )}
 
@@ -267,13 +283,17 @@ export default function PortalApply() {
             >
               {file ? (
                 <div>
-                  <div style={{ fontSize: 24, marginBottom: 6 }}>📄</div>
+                  <div style={{ color: 'var(--ok)', marginBottom: 8, display: 'flex', justifyContent: 'center' }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path><polyline points="13 2 13 9 20 9"></polyline></svg>
+                  </div>
                   <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--ok)' }}>{file.name}</div>
                   <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 3 }}>{(file.size / 1024).toFixed(1)} KB · Click to change</div>
                 </div>
               ) : (
                 <div>
-                  <div style={{ fontSize: 24, marginBottom: 6 }}>📂</div>
+                  <div style={{ color: 'var(--t2)', marginBottom: 8, display: 'flex', justifyContent: 'center' }}>
+                    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path><line x1="12" y1="11" x2="12" y2="17"></line><line x1="9" y1="14" x2="15" y2="14"></line></svg>
+                  </div>
                   <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--t2)' }}>Click or drag & drop CSV here</div>
                   <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 3 }}>Max 5 MB · CSV only</div>
                 </div>

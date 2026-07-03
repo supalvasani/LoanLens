@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.auth import require_role
 from app.core.database import get_db
 from app.core.rate_limit import limiter
+from app.core.logger import logger
 from app.enums import RoleEnum
 from app.models.user import User
 
@@ -56,10 +57,12 @@ async def upload_bank_statement(
 ) -> StatementUploadResult:
     # ── 1. Validate file type ────────────────────────────────────────────────
     if not file.filename or not file.filename.lower().endswith(".csv"):
+        logger.warning("bank_statement_upload_invalid_type", extra={"filename": file.filename})
         raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
 
     raw_bytes = await file.read()
     if len(raw_bytes) > MAX_FILE_SIZE_BYTES:
+        logger.warning("bank_statement_upload_too_large", extra={"size": len(raw_bytes)})
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 5 MB.")
 
     # ── 2. Resolve applicant_id from raw_applicants ──────────────────────────
@@ -69,6 +72,7 @@ async def upload_bank_statement(
     )
     row = result.mappings().first()
     if not row:
+        logger.warning("bank_statement_upload_no_profile", extra={"user_id": str(current_user.user_id)})
         raise HTTPException(
             status_code=422,
             detail="No applicant profile found. Please complete your profile before uploading.",
@@ -78,21 +82,38 @@ async def upload_bank_statement(
     # ── 3. Parse CSV ──────────────────────────────────────────────────────────
     try:
         text_content = raw_bytes.decode("utf-8-sig")  # handle BOM
-    except UnicodeDecodeError:
+    except UnicodeDecodeError as exc:
+        logger.warning("bank_statement_upload_unicode_error", extra={"error": str(exc)})
         raise HTTPException(status_code=400, detail="File encoding must be UTF-8.")
 
     reader = csv.DictReader(io.StringIO(text_content))
     if reader.fieldnames is None:
+        logger.warning("bank_statement_upload_empty_csv")
         raise HTTPException(status_code=400, detail="Empty or unreadable CSV.")
 
-    cols = {c.strip().lower() for c in reader.fieldnames}
-    missing = REQUIRED_COLS - cols
-    if missing:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Missing required columns: {', '.join(sorted(missing))}. "
-                   f"Required: txn_date, amount, txn_type, description, balance_after",
-        )
+    raw_headers = [h.strip() for h in reader.fieldnames if h]
+    headers_lower = [h.lower() for h in raw_headers]
+
+    is_standard = all(col in headers_lower for col in ["txn_date", "amount", "txn_type", "description", "balance_after"])
+    is_banking = "date" in headers_lower and "description" in headers_lower and any("debit" in h for h in headers_lower) and any("credit" in h for h in headers_lower) and any("balance" in h for h in headers_lower)
+
+    if not is_standard and not is_banking:
+        msg = f"Unsupported CSV headers: {', '.join(raw_headers)}. Required columns are either (txn_date, amount, txn_type, description, balance_after) or standard bank export columns (Date, Description, Debit, Credit, Balance)."
+        logger.warning("bank_statement_upload_invalid_headers", extra={"headers": raw_headers})
+        raise HTTPException(status_code=400, detail=msg)
+
+    # Helper function for flexible date parsing
+    def parse_flexible_date(date_str: str) -> date:
+        try:
+            return date.fromisoformat(date_str)
+        except ValueError:
+            pass
+        for fmt in ("%d-%b-%Y", "%d-%B-%Y", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
+            try:
+                return datetime.strptime(date_str, fmt).date()
+            except ValueError:
+                continue
+        raise ValueError(f"Invalid format")
 
     # ── 4. Insert rows ────────────────────────────────────────────────────────
     rows_inserted = 0
@@ -110,36 +131,77 @@ async def upload_bank_statement(
     for i, row in enumerate(reader, start=2):  # row 1 = header
         line_errors: list[str] = []
 
-        # txn_date
-        raw_date = row.get("txn_date", "").strip()
+        if is_standard:
+            raw_date = row.get("txn_date", "").strip()
+            raw_amount = row.get("amount", "").strip()
+            raw_type = row.get("txn_type", "").strip().lower()
+            raw_desc = row.get("description", "").strip()
+            raw_balance = row.get("balance_after", "").strip()
+        else:
+            # Resolve keys dynamically by checking lowercase substrings
+            date_key = next((k for k in row.keys() if k and "date" in k.lower()), None)
+            desc_key = next((k for k in row.keys() if k and "description" in k.lower()), None)
+            debit_key = next((k for k in row.keys() if k and "debit" in k.lower()), None)
+            credit_key = next((k for k in row.keys() if k and "credit" in k.lower()), None)
+            balance_key = next((k for k in row.keys() if k and "balance" in k.lower()), None)
+
+            raw_date = row.get(date_key, "").strip() if date_key else ""
+            raw_desc = row.get(desc_key, "").strip() if desc_key else ""
+            raw_balance = row.get(balance_key, "").strip() if balance_key else ""
+            
+            debit_val = row.get(debit_key, "").strip() if debit_key else ""
+            credit_val = row.get(credit_key, "").strip() if credit_key else ""
+
+            # Check if this row is just an opening balance or note row
+            if not debit_val and not credit_val:
+                rows_skipped += 1
+                continue
+
+            if credit_val:
+                raw_amount = credit_val
+                raw_type = "credit"
+            else:
+                raw_amount = debit_val
+                raw_type = "debit"
+
+        # ── 1. Clean and Parse Date ──
         try:
-            txn_date = date.fromisoformat(raw_date)
-        except ValueError:
-            line_errors.append(f"Row {i}: invalid txn_date '{raw_date}' (expected YYYY-MM-DD)")
+            # Strip low balance warning comments from balance/amounts
+            if "(" in raw_balance:
+                raw_balance = raw_balance.split("(")[0].strip()
+            if "(" in raw_amount:
+                raw_amount = raw_amount.split("(")[0].strip()
+
+            raw_amount = raw_amount.replace(",", "")
+            raw_balance = raw_balance.replace(",", "")
+
+            txn_date = parse_flexible_date(raw_date)
+        except ValueError as exc:
+            line_errors.append(f"Row {i}: invalid txn_date '{raw_date}' — {exc}")
             txn_date = None  # type: ignore[assignment]
 
-        # amount
+        # ── 2. Parse Amount ──
         try:
-            amount = Decimal(row.get("amount", "").strip())
+            amount = Decimal(raw_amount)
             if amount <= 0:
                 raise ValueError("must be positive")
         except (InvalidOperation, ValueError):
-            line_errors.append(f"Row {i}: invalid amount '{row.get('amount', '')}'")
+            line_errors.append(f"Row {i}: invalid amount '{raw_amount}'")
             amount = None  # type: ignore[assignment]
 
-        # txn_type
-        txn_type = row.get("txn_type", "").strip().lower()
+        # ── 3. Parse Type ──
+        txn_type = raw_type.strip().lower()
         if txn_type not in VALID_TXN_TYPES:
             line_errors.append(f"Row {i}: txn_type must be 'credit' or 'debit', got '{txn_type}'")
 
-        # description
-        description = row.get("description", "").strip()[:255] or "—"
+        # ── 4. Parse Description ──
+        description = raw_desc.strip()[:255] or "—"
 
-        # balance_after
+        # ── 5. Parse Balance After ──
         try:
-            balance_after = Decimal(row.get("balance_after", "").strip())
+            balance_after = Decimal(raw_balance)
         except (InvalidOperation, ValueError):
-            line_errors.append(f"Row {i}: invalid balance_after '{row.get('balance_after', '')}'")
+            line_errors.append(f"Row {i}: invalid balance_after '{raw_balance}'")
             balance_after = None  # type: ignore[assignment]
 
         if line_errors:
@@ -171,6 +233,6 @@ async def upload_bank_statement(
     return StatementUploadResult(
         rows_inserted=rows_inserted,
         rows_skipped=rows_skipped,
-        errors=errors[:20],  # cap error list at 20 for response size
+        errors=errors[:20],
         applicant_id=applicant_id,
     )
