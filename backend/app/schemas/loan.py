@@ -41,7 +41,7 @@ class LoanApplicationResponse(BaseModel):
 # ── Mart data sub-schemas (returned alongside application) ───────────────────
 
 class CreditScoreData(BaseModel):
-    applicant_id: str | None = None
+    applicant_id: UUID | None = None
     score: float | None = None
     income_stability_score: float | None = None
     emi_burden_score: float | None = None
@@ -94,6 +94,27 @@ class ApplicationWithMartDataResponse(BaseModel):
     monthly_trend: list[MonthlyTrendPoint] = Field(default_factory=list)
     risk_tier: str | None = None
     decisions: list["DecisionResponse"] = Field(default_factory=list)
+
+
+# ── Analyst Queue (enriched flat row) ────────────────────────────────────────
+
+class AnalystQueueItem(BaseModel):
+    """Flat enriched row for the analyst application queue.
+
+    Combines raw_loan_applications with mart credit score, risk, fraud flag
+    summary so the analyst doesn't need a separate round-trip per row.
+    """
+    application_id: UUID
+    applicant_name: str | None = None          # from raw_applicants if available
+    loan_type: LoanTypeEnum
+    amount_requested: Decimal
+    purpose: str
+    status: ApplicationStatusEnum
+    submitted_at: datetime
+    score: float | None = None                 # mart_credit_score.score
+    risk_tier: str | None = None               # mart_risk_segmentation.risk_tier
+    recommendation: str | None = None          # mart_credit_score.recommendation
+    has_fraud_flags: bool = False              # True if any row in mart_fraud_flags
 
 
 # ── Decision ─────────────────────────────────────────────────────────────────

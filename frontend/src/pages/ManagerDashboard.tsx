@@ -5,7 +5,6 @@
 
 import { useState } from 'react';
 import { DashboardShell } from '../components/DashboardShell';
-import { useAuth } from '../contexts/AuthContext';
 
 const STATS = [
   { icon: '🚨', label: 'Pending Escalations', value: '23',      trend: '+3', dir: 'warn',  bg: 'rgba(239,68,68,0.15)',   color: '#f87171' },
@@ -36,17 +35,13 @@ const urgencyClass: Record<string, string> = {
 };
 
 export default function ManagerDashboard() {
-  const { user } = useAuth();
-  const [activeNav, setActiveNav] = useState('overview');
   const [selectedApp, setSelectedApp] = useState<string | null>(null);
 
   return (
     <DashboardShell
       title="Escalation Pipeline"
       subtitle={`Manager view — ${new Date().toLocaleDateString('en-IN', { weekday: 'long', day: 'numeric', month: 'long' })}`}
-      activeNav={activeNav}
-      onNavChange={setActiveNav}
-      topbarActions={
+      actions={
         <div className="flex items-center gap-2">
           <span className="badge badge-manager">Bank Manager</span>
           <button className="btn btn-ghost btn-sm">📊 Reports</button>

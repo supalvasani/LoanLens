@@ -14,12 +14,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.logger import logger
 from app.enums import ApplicationStatusEnum, LoanTypeEnum, RoleEnum
 from app.exceptions.domain import InsufficientPermissionsException, ResourceNotFoundException
+from app.models.loan import RawLoanApplication
 from app.models.user import User
 from app.repositories.application_repository import ApplicationRepository
 from app.repositories.audit_log_repository import AuditLogRepository
 from app.repositories.decision_repository import DecisionRepository
 from app.repositories.mart_repository import MartRepository
 from app.schemas.loan import (
+    AnalystQueueItem,
     ApplicationWithMartDataResponse,
     CreditScoreData,
     DecisionResponse,
@@ -268,6 +270,108 @@ class ApplicationService:
             offset=offset,
         )
         return [LoanApplicationResponse.model_validate(a) for a in applications]
+
+    async def list_analyst_queue(
+        self,
+        analyst: User,
+        *,
+        score_min: float | None = None,
+        score_max: float | None = None,
+        risk_segment: str | None = None,
+        loan_type: LoanTypeEnum | None = None,
+        recommendation: str | None = None,
+        sort_by: str = "submitted_at",
+        sort_dir: str = "desc",
+        limit: int = 100,
+        offset: int = 0,
+    ) -> list[AnalystQueueItem]:
+        """Return non-escalated applications enriched with mart data.
+
+        Filters (all optional):
+            score_min, score_max  — credit score range (float)
+            risk_segment          — low / medium / high
+            loan_type             — LoanTypeEnum value
+            recommendation        — approve / review / reject
+
+        Sort fields: score, submitted_at, amount_requested
+        """
+        import asyncio
+
+        if analyst.role != RoleEnum.analyst:
+            raise InsufficientPermissionsException()
+
+        # 1. Base list — role gate already filters out escalated for analysts
+        raw_apps = await self.app_repo.get_all(
+            current_user=analyst,
+            loan_type=loan_type,
+            limit=500,   # fetch more for in-memory mart filtering
+            offset=0,
+        )
+
+        # 2. Enrich each application with mart data concurrently
+        async def _none() -> None:
+            return None
+
+        async def _false() -> bool:
+            return False
+
+        async def _enrich(app: "RawLoanApplication") -> AnalystQueueItem:
+            applicant_id = await self.mart_repo.get_applicant_id_for_user(app.user_id)
+
+            # Fetch mart data in parallel for this application
+            score_task = self.mart_repo.get_credit_score(applicant_id) if applicant_id else _none()
+            risk_task  = self.mart_repo.get_risk_tier(applicant_id)    if applicant_id else _none()
+            fraud_task = self.mart_repo.has_any_fraud_flag(applicant_id) if applicant_id else _false()
+            name_task  = self.mart_repo.get_applicant_name(applicant_id) if applicant_id else _none()
+
+            score_row, risk_tier, has_fraud, applicant_name = await asyncio.gather(
+                score_task, risk_task, fraud_task, name_task
+            )
+
+            score = float(score_row["score"]) if score_row and score_row.get("score") is not None else None
+            rec   = score_row.get("recommendation") if score_row else None
+
+            return AnalystQueueItem(
+                application_id=app.application_id,
+                applicant_name=applicant_name,
+                loan_type=app.loan_type,
+                amount_requested=app.amount_requested,
+                purpose=app.purpose,
+                status=app.status,
+                submitted_at=app.submitted_at,
+                score=score,
+                risk_tier=risk_tier,
+                recommendation=rec,
+                has_fraud_flags=bool(has_fraud),
+            )
+
+        items = await asyncio.gather(*[_enrich(a) for a in raw_apps])
+
+        # 3. Apply mart-level filters (cannot be done in DB query)
+        result: list[AnalystQueueItem] = []
+        for item in items:
+            if score_min is not None and (item.score is None or item.score < score_min):
+                continue
+            if score_max is not None and (item.score is None or item.score > score_max):
+                continue
+            if risk_segment is not None and (item.risk_tier or "").lower() != risk_segment.lower():
+                continue
+            if recommendation is not None and (item.recommendation or "").lower() != recommendation.lower():
+                continue
+            result.append(item)
+
+        # 4. Sort
+        reverse = sort_dir.lower() == "desc"
+        if sort_by == "score":
+            result.sort(key=lambda x: (x.score is None, x.score or 0), reverse=reverse)
+        elif sort_by == "amount_requested":
+            result.sort(key=lambda x: float(x.amount_requested), reverse=reverse)
+        else:  # default: submitted_at
+            result.sort(key=lambda x: x.submitted_at, reverse=reverse)
+
+        # 5. Paginate
+        return result[offset: offset + limit]
+
 
     async def get_my_applications(
         self,

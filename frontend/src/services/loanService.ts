@@ -62,6 +62,33 @@ export interface UploadResult {
   applicant_id: string | null;
 }
 
+// ── Analyst Queue item (enriched flat row from GET /analyst/applications) ────
+export interface AnalystQueueItem {
+  application_id: string;
+  applicant_name: string | null;
+  loan_type: LoanType;
+  amount_requested: number;
+  purpose: string;
+  status: string;
+  submitted_at: string;
+  score: number | null;
+  risk_tier: string | null;
+  recommendation: string | null;
+  has_fraud_flags: boolean;
+}
+
+export interface AnalystQueueParams {
+  score_min?: number;
+  score_max?: number;
+  risk_segment?: string;
+  loan_type?: string;
+  recommendation?: string;
+  sort_by?: 'score' | 'submitted_at' | 'amount_requested';
+  sort_dir?: 'asc' | 'desc';
+  limit?: number;
+  offset?: number;
+}
+
 // ── Service ───────────────────────────────────────────────────────────────────
 export const loanService = {
 
@@ -85,6 +112,18 @@ export const loanService = {
 
   async getApplication(id: string): Promise<ApplicationFull> {
     const res = await api.get(`/applications/${id}`);
+    return res.data;
+  },
+
+  // Analyst-specific enriched queue with mart-data filters
+  async listAnalystQueue(params: AnalystQueueParams = {}): Promise<AnalystQueueItem[]> {
+    const res = await api.get('/analyst/applications', { params });
+    return res.data;
+  },
+
+  // Analyst: full credit report for one application (role-gated)
+  async getAnalystApplication(id: string): Promise<ApplicationFull> {
+    const res = await api.get(`/analyst/applications/${id}`);
     return res.data;
   },
 
@@ -119,7 +158,7 @@ export const loanService = {
     form.append('file', file);
     const res = await api.post('/upload/bank-statement', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
-      timeout: 60000, // larger timeout for file processing
+      timeout: 60000,
     });
     return res.data;
   },

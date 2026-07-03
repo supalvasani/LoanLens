@@ -227,3 +227,25 @@ class MartRepository:
         except ProgrammingError:
             await self.session.rollback()
             return None
+
+    async def get_applicant_name(
+        self, applicant_id: uuid.UUID
+    ) -> str | None:
+        """Look up the display name for a given raw_applicant_id."""
+        try:
+            result = await self.session.execute(
+                text(
+                    """
+                    SELECT name
+                    FROM raw_applicants
+                    WHERE raw_applicant_id = :applicant_id
+                    LIMIT 1
+                    """
+                ),
+                {"applicant_id": str(applicant_id)},
+            )
+            row = result.mappings().first()
+            return str(row["name"]) if row else None
+        except ProgrammingError:
+            await self.session.rollback()
+            return None

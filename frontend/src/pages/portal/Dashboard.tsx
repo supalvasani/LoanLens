@@ -3,13 +3,10 @@
 // Real data: applications list, credit score summary, eligibility snapshot
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { DashboardShell } from '../../components/DashboardShell';
 import { useAuth } from '../../contexts/AuthContext';
-import { loanService } from '../../services/loanService';
-import type { LoanApplication } from '../../types/loan';
-import type { CreditScoreData, EligibilityData } from '../../services/loanService';
+import { usePortalData } from '../../hooks/usePortalData';
 
 const STATUS_COLOR: Record<string, { bg: string; color: string; label: string }> = {
   pending:      { bg: 'rgba(148,163,184,.12)', color: '#64748b', label: 'Pending Review' },
@@ -49,22 +46,7 @@ function QuickCard({ icon, label, path, desc }: { icon: React.ReactNode; label: 
 
 export default function PortalDashboard() {
   const { user } = useAuth();
-  const [apps, setApps]         = useState<(LoanApplication & { primary_rejection_reason?: string | null })[]>([]);
-  const [score, setScore]       = useState<CreditScoreData | null>(null);
-  const [eligibility, setElig]  = useState<EligibilityData | null>(null);
-  const [loading, setLoading]   = useState(true);
-
-  useEffect(() => {
-    Promise.allSettled([
-      loanService.getMyApplications(),
-      loanService.getMyCreditScore(),
-      loanService.getMyEligibility(),
-    ]).then(([appRes, scoreRes, eligRes]) => {
-      if (appRes.status === 'fulfilled')   setApps(appRes.value);
-      if (scoreRes.status === 'fulfilled') setScore(scoreRes.value);
-      if (eligRes.status === 'fulfilled')  setElig(eligRes.value);
-    }).finally(() => setLoading(false));
-  }, []);
+  const { apps, score, eligibility, loading } = usePortalData();
 
   const latestApp = apps[0] ?? null;
   const statusInfo = latestApp ? (STATUS_COLOR[latestApp.status] ?? STATUS_COLOR.pending) : null;

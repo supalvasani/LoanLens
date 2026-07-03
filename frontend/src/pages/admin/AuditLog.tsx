@@ -7,24 +7,26 @@ import { DashboardShell } from '../../components/DashboardShell';
 import { adminService } from '../../services/adminService';
 import type { AuditLogEntry } from '../../types/admin';
 
-const ACTION_BADGE: Record<string, string> = {
-  login:            'background:rgba(56,189,248,.1);color:#0284c7',
-  logout:           'background:rgba(148,163,184,.1);color:#64748b',
-  create_user:      'background:rgba(34,197,94,.1);color:#16a34a',
-  deactivate_user:  'background:rgba(239,68,68,.1);color:#dc2626',
-  reactivate_user:  'background:rgba(34,197,94,.1);color:#16a34a',
-  change_role:      'background:rgba(245,158,11,.1);color:#d97706',
-  update_config:    'background:rgba(99,102,241,.1);color:#6366f1',
-  approve:          'background:rgba(34,197,94,.1);color:#16a34a',
-  reject:           'background:rgba(239,68,68,.1);color:#dc2626',
-  escalate:         'background:rgba(245,158,11,.1);color:#d97706',
-  apply:            'background:rgba(56,189,248,.1);color:#0284c7',
+import { type CSSProperties } from 'react';
+
+const ACTION_BADGE: Record<string, CSSProperties> = {
+  login:            { backgroundColor: 'rgba(56,189,248,.1)', color: '#0284c7' },
+  logout:           { backgroundColor: 'rgba(148,163,184,.1)', color: '#64748b' },
+  create_user:      { backgroundColor: 'rgba(34,197,94,.1)', color: '#16a34a' },
+  deactivate_user:  { backgroundColor: 'rgba(239,68,68,.1)', color: '#dc2626' },
+  reactivate_user:  { backgroundColor: 'rgba(34,197,94,.1)', color: '#16a34a' },
+  change_role:      { backgroundColor: 'rgba(245,158,11,.1)', color: '#d97706' },
+  update_config:    { backgroundColor: 'rgba(99,102,241,.1)', color: '#6366f1' },
+  approve:          { backgroundColor: 'rgba(34,197,94,.1)', color: '#16a34a' },
+  reject:           { backgroundColor: 'rgba(239,68,68,.1)', color: '#dc2626' },
+  escalate:         { backgroundColor: 'rgba(245,158,11,.1)', color: '#d97706' },
+  apply:            { backgroundColor: 'rgba(56,189,248,.1)', color: '#0284c7' },
 };
 
 function ActionBadge({ action }: { action: string }) {
-  const style = ACTION_BADGE[action] ?? 'background:rgba(148,163,184,.1);color:#64748b';
+  const style = ACTION_BADGE[action] ?? { backgroundColor: 'rgba(148,163,184,.1)', color: '#64748b' };
   return (
-    <span className="badge" style={{ cssText: `${style};font-size:11px;padding:2px 8px` }}>
+    <span className="badge" style={{ ...style, fontSize: '11px', padding: '2px 8px' }}>
       {action.replace(/_/g, ' ')}
     </span>
   );

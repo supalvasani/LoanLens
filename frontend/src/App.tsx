@@ -29,6 +29,7 @@ import ManagerQueue     from './pages/manager/Queue';
 import AnalystDashboard       from './pages/analyst/Dashboard';
 import AnalystQueue           from './pages/analyst/Queue';
 import ApplicationDetail      from './pages/analyst/ApplicationDetail';
+import AnalystChatbot         from './pages/analyst/Chatbot';
 
 // ── Root redirect ─────────────────────────────────────────────────────────────
 function RootRedirect() {
@@ -84,6 +85,7 @@ export default function App() {
           <Route path="/analyst/dashboard"              element={<R roles={['analyst']}><AnalystDashboard /></R>} />
           <Route path="/analyst/queue"                  element={<R roles={['analyst']}><AnalystQueue /></R>} />
           <Route path="/analyst/applications/:id"       element={<R roles={['analyst']}><ApplicationDetail /></R>} />
+          <Route path="/analyst/chatbot"                element={<R roles={['analyst']}><AnalystChatbot /></R>} />
           <Route path="/analyst/*"                      element={<R roles={['analyst']}><AnalystDashboard /></R>} />
 
           {/* Root */}

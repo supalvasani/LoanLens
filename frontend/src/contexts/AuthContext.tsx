@@ -13,7 +13,7 @@ import {
 } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { authService } from '../services/authService';
-import type { AuthState, UserResponse, LoginRequest, Role, TokenPayload } from '../types/auth';
+import type { AuthState, LoginRequest, Role, TokenPayload } from '../types/auth';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 

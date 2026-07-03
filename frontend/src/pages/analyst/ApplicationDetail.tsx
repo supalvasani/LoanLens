@@ -1,103 +1,110 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// LoanLens — Analyst: Application Detail & Review
+// LoanLens — Analyst: Full Credit Report + Decision Panel
+// Uses Recharts: BarChart (score components), LineChart (monthly trend),
+//               PieChart (score breakdown categories)
 // ─────────────────────────────────────────────────────────────────────────────
-
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  LineChart, Line, PieChart, Pie, Legend,
+} from 'recharts';
 import { DashboardShell } from '../../components/DashboardShell';
-import { loanService } from '../../services/loanService';
-import type { ApplicationFull, DecisionType, RiskTier } from '../../types/loan';
+import { useApplication } from '../../hooks/useApplication';
+import { useLoanAction } from '../../hooks/useLoanAction';
+import type { DecisionType } from '../../types/loan';
 
-const RISK_COLOR: Record<RiskTier, string> = {
-  very_low: 'var(--ok)',
-  low:      'var(--ok)',
-  medium:   'var(--warn)',
-  high:     'var(--bad)',
-  very_high:'var(--bad)',
-};
+// ── Colour helpers ────────────────────────────────────────────────────────────
 
-const STATUS_BADGE: Record<string, string> = {
-  pending:      'badge-warn',
-  under_review: 'badge-warn',
-  escalated:    'badge-warn',
-  approved:     'badge-ok',
-  rejected:     'badge-bad',
-};
+function scoreColor(score: number | null): string {
+  if (score === null) return 'var(--t3)';
+  if (score > 65)  return '#2E7D32';
+  if (score >= 45) return '#d97706';
+  return '#C62828';
+}
 
-function ScoreGauge({ score }: { score: number }) {
-  const pct = Math.min(100, Math.max(0, score));
-  const color = score >= 70 ? 'var(--ok)' : score >= 45 ? 'var(--warn)' : 'var(--bad)';
+const PIE_COLORS = ['#4F81C7', '#2E7D32', '#d97706', '#C62828', '#7C3AED', '#0891b2'];
+
+// ── Sub-components ────────────────────────────────────────────────────────────
+
+function SectionHeader({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ textAlign: 'center', padding: '8px 0' }}>
-      <div style={{ fontSize: 48, fontWeight: 800, color, letterSpacing: '-0.04em', lineHeight: 1 }}>
-        {score}
-      </div>
-      <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 4, textTransform: 'uppercase', letterSpacing: '.08em' }}>
-        Credit Score
-      </div>
-      <div style={{ marginTop: 12, height: 6, background: 'var(--bg)', borderRadius: 99, overflow: 'hidden' }}>
-        <div style={{ height: '100%', width: `${pct}%`, background: color, borderRadius: 99, transition: 'width .6s ease' }} />
-      </div>
+    <div style={{
+      fontSize: 11, fontWeight: 700, letterSpacing: '.08em',
+      textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 14,
+    }}>
+      {children}
     </div>
   );
 }
 
-function MetricRow({ label, value, note }: { label: string; value: string | number; note?: string }) {
+function MetricRow({ label, value, note, alert }: {
+  label: string; value: string | number; note?: string; alert?: boolean;
+}) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '9px 0', borderBottom: '1px solid var(--border-s)' }}>
+    <div style={{
+      display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+      padding: '9px 0', borderBottom: '1px solid var(--border-s)',
+    }}>
       <span style={{ fontSize: 12, color: 'var(--t2)' }}>{label}</span>
       <div style={{ textAlign: 'right' }}>
-        <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--t1)' }}>{value}</span>
-        {note && <div style={{ fontSize: 11, color: 'var(--t3)' }}>{note}</div>}
+        <span style={{ fontSize: 13, fontWeight: 600, color: alert ? 'var(--bad)' : 'var(--t1)' }}>{value}</span>
+        {note && <div style={{ fontSize: 11, color: alert ? 'var(--bad)' : 'var(--t3)' }}>{note}</div>}
       </div>
     </div>
   );
 }
+
+function ScoreGauge({ score }: { score: number }) {
+  const color = scoreColor(score);
+  const label = score > 65 ? 'Approvable' : score >= 45 ? 'Grey Zone — Escalate' : 'Rejectable';
+  return (
+    <div style={{ textAlign: 'center', padding: '12px 0' }}>
+      <div style={{ fontSize: 64, fontWeight: 900, color, letterSpacing: '-0.05em', lineHeight: 1 }}>
+        {score.toFixed(0)}
+      </div>
+      <div style={{ fontSize: 12, color, fontWeight: 600, marginTop: 6 }}>{label}</div>
+      <div style={{ marginTop: 14, height: 8, background: 'var(--bg)', borderRadius: 99, overflow: 'hidden' }}>
+        <div style={{
+          height: '100%', width: `${Math.min(100, score)}%`,
+          background: color, borderRadius: 99, transition: 'width .8s ease',
+        }} />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 4, fontSize: 10, color: 'var(--t3)' }}>
+        <span>0</span><span>45</span><span>65</span><span>100</span>
+      </div>
+    </div>
+  );
+}
+
+// ── Main component ────────────────────────────────────────────────────────────
 
 export default function ApplicationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const [data, setData]       = useState<ApplicationFull | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState<string | null>(null);
-  const [notes, setNotes]     = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const { data, loading, error } = useApplication(id, 'analyst');
+  const { submitting, error: decisionError, clearError: clearDecisionError, submitAnalyst } = useLoanAction();
+  const [notes, setNotes]           = useState('');
   const [actionDone, setActionDone] = useState<string | null>(null);
-
-  useEffect(() => {
-    if (!id) return;
-    loanService.getApplication(id)
-      .then(setData)
-      .catch(() => setError('Failed to load application.'))
-      .finally(() => setLoading(false));
-  }, [id]);
 
   async function handleDecision(decision: DecisionType) {
     if (!id) return;
-    if (decision === 'escalated' && !notes.trim()) {
-      alert('Please add a reason before escalating.');
-      return;
-    }
-    setSubmitting(true);
-    try {
-      if (decision === 'escalated') {
-        await loanService.escalate(id, notes);
-      } else {
-        await loanService.decideAnalyst(id, decision, notes);
-      }
-      setActionDone(decision);
-    } catch {
-      setError('Failed to submit decision. Please try again.');
-    } finally {
-      setSubmitting(false);
-    }
+    clearDecisionError();
+    const actionMode = decision === 'approved' ? 'approved'
+      : decision === 'rejected' ? 'rejected'
+      : 'escalated';
+    const ok = await submitAnalyst(id, actionMode, notes || undefined);
+    if (ok) setActionDone(decision);
   }
 
+  // ── Loading / Error states ────────────────────────────────────────────────
+
   if (loading) return (
-    <DashboardShell title="Loading…" subtitle="Fetching application">
-      <div style={{ textAlign: 'center', padding: 60, color: 'var(--t3)' }}>
-        <span className="spinner" style={{ fontSize: 24 }} /> Loading application…
+    <DashboardShell title="Loading…" subtitle="Fetching credit report">
+      <div style={{ textAlign: 'center', padding: 80, color: 'var(--t3)' }}>
+        <span className="spinner" style={{ fontSize: 20, marginRight: 8 }} />
+        Loading application…
       </div>
     </DashboardShell>
   );
@@ -105,25 +112,71 @@ export default function ApplicationDetail() {
   if (error) return (
     <DashboardShell title="Error">
       <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>
-      <button className="btn btn-secondary" style={{ marginTop: 16 }} onClick={() => navigate('/analyst/queue')}>← Back to Queue</button>
+      <button className="btn btn-secondary" style={{ marginTop: 16 }} onClick={() => navigate(-1)}>
+        ← Back
+      </button>
     </DashboardShell>
   );
 
   if (actionDone) return (
-    <DashboardShell title="Decision Submitted">
+    <DashboardShell title="Decision Recorded">
       <div className="alert alert-success" style={{ marginBottom: 20 }}>
         <span>✓</span>
         <span>
           Application <strong>{id?.slice(0, 8)}…</strong> has been{' '}
-          <strong>{actionDone === 'escalated' ? 'escalated to manager' : actionDone}</strong>.
+          <strong>{actionDone === 'escalated' ? 'escalated to Bank Manager' : actionDone}</strong>.
         </span>
       </div>
-      <button className="btn btn-secondary" onClick={() => navigate('/analyst/queue')}>← Back to Queue</button>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button className="btn btn-secondary" onClick={() => navigate('/analyst/queue')}>
+          ← Back to Queue
+        </button>
+        <button className="btn btn-ghost" onClick={() => navigate('/analyst/dashboard')}>
+          Dashboard
+        </button>
+      </div>
     </DashboardShell>
   );
 
-  const { application: app, credit_score, fraud_flags, eligibility, underwriter_report } = data!;
-  const canDecide = ['pending', 'under_review'].includes(app.status);
+  const {
+    application: app,
+    credit_score, fraud_flags, eligibility,
+    underwriter_report, monthly_trend, risk_tier, decisions,
+  } = data!;
+
+  const score      = credit_score?.score ?? null;
+  const hasFraud   = fraud_flags.length > 0;
+  const canDecide  = ['pending', 'under_review'].includes(app.status);
+
+  // Decision button rules (server enforces them too; client disables for UX)
+  const canApprove = canDecide && !hasFraud && score !== null && score > 65;
+  const canReject  = canDecide && !hasFraud && score !== null && score < 45;
+
+  // Score component bar chart data
+  const scoreBarData = [
+    { name: 'Income Stability', value: credit_score?.income_stability_score ?? 0 },
+    { name: 'EMI Burden',       value: credit_score?.emi_burden_score ?? 0 },
+    { name: 'Bounce Rate',      value: credit_score?.bounce_score ?? 0 },
+    { name: 'Balance',          value: credit_score?.balance_score ?? 0 },
+  ];
+
+  // Monthly trend line chart data (chronological order)
+  const trendData = [...monthly_trend]
+    .reverse()
+    .map(p => ({ month: p.month?.slice(0, 7) ?? '', score: p.score }));
+
+  // Score breakdown pie (if available in JSON)
+  const breakdownRaw = credit_score?.score_breakdown_json as Record<string, unknown> | null;
+  const pieData = breakdownRaw
+    ? Object.entries(breakdownRaw)
+        .filter(([, v]) => typeof v === 'number' && v > 0)
+        .map(([k, v]) => ({ name: k.replace(/_/g, ' '), value: Number(v) }))
+    : [];
+
+  const statusBadge: Record<string, string> = {
+    pending: 'badge-warn', under_review: 'badge-warn',
+    escalated: 'badge-warn', approved: 'badge-ok', rejected: 'badge-bad',
+  };
 
   return (
     <DashboardShell
@@ -131,174 +184,380 @@ export default function ApplicationDetail() {
       subtitle={`App ID: ${app.application_id.slice(0, 8)}… · Submitted ${new Date(app.submitted_at).toLocaleDateString('en-IN')}`}
       actions={
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span className={`badge ${STATUS_BADGE[app.status] ?? ''}`}>{app.status.replace(/_/g, ' ')}</span>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/analyst/queue')}>← Queue</button>
+          {hasFraud && (
+            <span className="badge badge-bad" style={{ gap: 4 }}>⚠ Fraud Flagged</span>
+          )}
+          <span className={`badge ${statusBadge[app.status] ?? ''}`}>
+            {app.status.replace(/_/g, ' ')}
+          </span>
+          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/analyst/queue')}>
+            ← Queue
+          </button>
         </div>
       }
     >
-      {/* Top row: Application + Credit Score */}
+
+      {/* ── Fraud Alert (shown prominently if flagged) ─────────────────────── */}
+      {hasFraud && (
+        <div style={{
+          marginBottom: 20, padding: '14px 18px',
+          background: 'var(--bad-b)', border: '1px solid rgba(198,40,40,.25)',
+          borderRadius: 'var(--r-md)',
+        }}>
+          <div style={{ fontWeight: 700, color: 'var(--bad)', marginBottom: 8, fontSize: 13 }}>
+            ⚠ Fraud Signals Detected — Escalation Required
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {fraud_flags.map((f, i) => (
+              <div key={i} style={{
+                padding: '6px 12px', background: '#fff',
+                border: '1px solid rgba(198,40,40,.2)', borderRadius: 'var(--r-sm)',
+                fontSize: 12,
+              }}>
+                <span style={{ fontWeight: 600, color: 'var(--bad)' }}>
+                  {f.flag_type.replace(/_/g, ' ')}
+                </span>
+                <span className="badge badge-bad" style={{ marginLeft: 8 }}>{f.severity}</span>
+                {f.flag_detail && (
+                  <div style={{ color: 'var(--t2)', marginTop: 2 }}>{f.flag_detail}</div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ── Row 1: Application Details + Credit Score ──────────────────────── */}
       <div className="grid-2" style={{ marginBottom: 20 }}>
 
-        {/* Application summary */}
+        {/* Application details */}
         <div className="card">
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 14 }}>
-            Application Details
-          </div>
+          <SectionHeader>Application Details</SectionHeader>
           <MetricRow label="Loan Type"        value={app.loan_type.replace(/_/g, ' ')} />
           <MetricRow label="Amount Requested" value={`₹${Number(app.amount_requested).toLocaleString('en-IN')}`} />
           <MetricRow label="Purpose"          value={app.purpose} />
           <MetricRow label="Current Status"   value={app.status.replace(/_/g, ' ')} />
+          <MetricRow label="Risk Tier"        value={risk_tier?.replace(/_/g, ' ') ?? '—'} />
           <MetricRow label="Submitted"        value={new Date(app.submitted_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} />
         </div>
 
         {/* Credit score */}
         <div className="card">
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 14 }}>
-            Credit Assessment
-          </div>
+          <SectionHeader>Credit Assessment</SectionHeader>
           {credit_score ? (
             <>
-              <ScoreGauge score={credit_score.final_score} />
-              <div style={{ marginTop: 16 }}>
-                <MetricRow label="Risk Tier"        value={credit_score.risk_tier.replace(/_/g, ' ')} />
-                <MetricRow label="Income Stability" value={`${credit_score.income_stability_score}/100`} />
-                <MetricRow label="EMI Burden"       value={`${credit_score.emi_burden_score}/100`} />
-                <MetricRow label="Bounce Rate"      value={`${credit_score.bounce_rate_score}/100`} />
-                <MetricRow label="Balance Stability" value={`${credit_score.balance_stability_score}/100`} />
-              </div>
-              <div style={{ marginTop: 12, padding: '10px 12px', background: 'var(--bg)', borderRadius: 'var(--r-sm)', fontSize: 12, color: 'var(--t2)' }}>
-                💡 {credit_score.recommendation}
+              <ScoreGauge score={credit_score.score ?? 0} />
+              <div style={{ marginTop: 14, padding: '10px 12px', background: 'var(--bg)', borderRadius: 'var(--r-sm)', fontSize: 12, color: 'var(--t2)' }}>
+                💡 {credit_score.recommendation ?? 'No recommendation available.'}
               </div>
             </>
           ) : (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--t3)', fontSize: 13 }}>
-              No credit score available yet.
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--t3)', fontSize: 13 }}>
+              No credit score yet. Run the dbt pipeline.
             </div>
           )}
         </div>
       </div>
 
-      {/* Second row: Underwriter + Eligibility */}
+      {/* ── Row 2: Score Component BarChart + Monthly Trend LineChart ──────── */}
+      {credit_score && (
+        <div className="grid-2" style={{ marginBottom: 20 }}>
+
+          {/* Score breakdown bar chart */}
+          <div className="card">
+            <SectionHeader>Score Component Breakdown</SectionHeader>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={scoreBarData} margin={{ top: 0, right: 0, bottom: 0, left: -20 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="name" tick={{ fontSize: 11, fill: 'var(--t2)' }} />
+                <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: 'var(--t3)' }} />
+                <Tooltip
+                  contentStyle={{ fontSize: 12, background: 'var(--surface)', border: '1px solid var(--border)' }}
+                  formatter={(v: any) => [`${v}/100`, 'Score']}
+                />
+                <Bar dataKey="value" radius={[3, 3, 0, 0]}>
+                  {scoreBarData.map((entry, index) => (
+                    <Cell
+                      key={index}
+                      fill={entry.value >= 70 ? '#2E7D32' : entry.value >= 45 ? '#d97706' : '#C62828'}
+                    />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+
+          {/* Monthly credit trend line chart */}
+          <div className="card">
+            <SectionHeader>Monthly Credit Trend (6 months)</SectionHeader>
+            {trendData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <LineChart data={trendData} margin={{ top: 0, right: 10, bottom: 0, left: -20 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: 'var(--t2)' }} />
+                  <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--t3)' }} />
+                  <Tooltip
+                    contentStyle={{ fontSize: 12, background: 'var(--surface)', border: '1px solid var(--border)' }}
+                    formatter={(v: any) => [`${v}`, 'Score']}
+                  />
+                  <Line
+                    type="monotone" dataKey="score"
+                    stroke={scoreColor(score)} strokeWidth={2.5}
+                    dot={{ r: 4, fill: scoreColor(score) }}
+                    activeDot={{ r: 6 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 200, color: 'var(--t3)', fontSize: 13 }}>
+                No trend data — run the dbt pipeline.
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Row 3: Underwriter Report + Spending PieChart ─────────────────── */}
       <div className="grid-2" style={{ marginBottom: 20 }}>
 
         {/* Underwriter report */}
         <div className="card">
-          <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 14 }}>
-            Underwriter Report
-          </div>
+          <SectionHeader>Underwriter Report</SectionHeader>
           {underwriter_report ? (
             <>
-              <MetricRow label="Monthly Income"      value={`₹${Number(underwriter_report.monthly_income).toLocaleString('en-IN')}`} />
-              <MetricRow label="Monthly Obligations" value={`₹${Number(underwriter_report.monthly_obligations).toLocaleString('en-IN')}`} />
-              <MetricRow label="EMI-to-Income Ratio" value={`${(underwriter_report.emi_to_income_ratio * 100).toFixed(1)}%`}
-                note={underwriter_report.emi_to_income_ratio > 0.5 ? '⚠ High burden' : '✓ Acceptable'} />
-              <MetricRow label="Avg Monthly Balance" value={`₹${Number(underwriter_report.avg_monthly_balance).toLocaleString('en-IN')}`} />
-              <MetricRow label="Bounce Rate"         value={`${(underwriter_report.bounce_rate * 100).toFixed(1)}%`}
-                note={underwriter_report.bounce_rate > 0.2 ? '⚠ Elevated' : '✓ Low'} />
-              <MetricRow label="Max Eligible EMI"    value={`₹${Number(underwriter_report.max_eligible_emi).toLocaleString('en-IN')}`} />
-              <div style={{ marginTop: 10 }}>
-                <span style={{ fontSize: 11, fontWeight: 600, color: RISK_COLOR[underwriter_report.risk_segment as RiskTier] ?? 'var(--t2)', textTransform: 'uppercase', letterSpacing: '.06em' }}>
-                  ● {underwriter_report.risk_segment.replace(/_/g, ' ')} Risk
+              <MetricRow
+                label="Avg Monthly Income"
+                value={`₹${Number(underwriter_report.avg_monthly_income ?? 0).toLocaleString('en-IN')}`}
+              />
+              <MetricRow
+                label="EMI Burden Ratio"
+                value={`${((underwriter_report.emi_burden_ratio ?? 0) * 100).toFixed(1)}%`}
+                note={(underwriter_report.emi_burden_ratio ?? 0) > 0.5 ? '⚠ High burden' : '✓ Acceptable'}
+                alert={(underwriter_report.emi_burden_ratio ?? 0) > 0.5}
+              />
+              <MetricRow
+                label="Savings Potential"
+                value={`₹${Number(underwriter_report.savings_potential ?? 0).toLocaleString('en-IN')}`}
+              />
+              <MetricRow
+                label="Bounce Count"
+                value={underwriter_report.bounce_count ?? 0}
+                alert={(underwriter_report.bounce_count ?? 0) > 3}
+              />
+              <MetricRow
+                label="Bounce Rate"
+                value={`${((underwriter_report.bounce_rate ?? 0) * 100).toFixed(1)}%`}
+                note={(underwriter_report.bounce_rate ?? 0) > 0.2 ? '⚠ Elevated' : '✓ Low'}
+                alert={(underwriter_report.bounce_rate ?? 0) > 0.2}
+              />
+              <div style={{ marginTop: 12 }}>
+                <span style={{
+                  fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
+                  color: underwriter_report.risk_segment === 'high' ? 'var(--bad)'
+                       : underwriter_report.risk_segment === 'medium' ? '#d97706'
+                       : 'var(--ok)',
+                }}>
+                  ● {underwriter_report.risk_segment?.replace(/_/g, ' ') ?? 'N/A'} Risk
                 </span>
               </div>
             </>
           ) : (
-            <div style={{ textAlign: 'center', padding: 32, color: 'var(--t3)', fontSize: 13 }}>No underwriter data available.</div>
+            <div style={{ textAlign: 'center', padding: 40, color: 'var(--t3)', fontSize: 13 }}>
+              No underwriter data available.
+            </div>
           )}
         </div>
 
-        {/* Eligibility + Fraud flags */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          <div className="card">
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 14 }}>
-              Loan Eligibility
+        {/* Score breakdown pie chart */}
+        <div className="card">
+          <SectionHeader>Score Breakdown Distribution</SectionHeader>
+          {pieData.length > 0 ? (
+            <ResponsiveContainer width="100%" height={240}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%" cy="50%"
+                  innerRadius={55} outerRadius={90}
+                  paddingAngle={3}
+                  dataKey="value"
+                  label={({ name, percent }) => `${name} ${(percent ? percent * 100 : 0).toFixed(0)}%`}
+                  labelLine={false}
+                >
+                  {pieData.map((_, index) => (
+                    <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  contentStyle={{ fontSize: 12, background: 'var(--surface)', border: '1px solid var(--border)' }}
+                />
+                <Legend wrapperStyle={{ fontSize: 11 }} />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: 240, color: 'var(--t3)', fontSize: 13 }}>
+              No score breakdown data.
             </div>
-            {eligibility ? (
-              <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <span style={{ fontSize: 13, color: 'var(--t2)' }}>Eligible?</span>
-                  <span className={`badge ${eligibility.is_eligible ? 'badge-ok' : 'badge-bad'}`}>
-                    {eligibility.is_eligible ? '✓ Eligible' : '✗ Not Eligible'}
-                  </span>
-                </div>
-                <MetricRow label="Applied Amount"   value={`₹${Number(eligibility.applied_amount).toLocaleString('en-IN')}`} />
-                <MetricRow label="Eligible Amount"  value={`₹${Number(eligibility.eligible_amount).toLocaleString('en-IN')}`} />
-                {eligibility.gap_amount > 0 && (
-                  <MetricRow label="Gap"            value={`₹${Number(eligibility.gap_amount).toLocaleString('en-IN')}`} note={eligibility.gap_reason ?? ''} />
-                )}
-              </>
-            ) : (
-              <div style={{ textAlign: 'center', padding: 20, color: 'var(--t3)', fontSize: 13 }}>No eligibility data.</div>
-            )}
-          </div>
-
-          <div className="card">
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 14 }}>
-              Fraud Flags {fraud_flags.length > 0 && <span className="badge badge-bad" style={{ marginLeft: 6 }}>{fraud_flags.length}</span>}
-            </div>
-            {fraud_flags.length === 0 ? (
-              <div style={{ fontSize: 13, color: 'var(--ok)' }}>✓ No fraud signals detected.</div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {fraud_flags.map(f => (
-                  <div key={f.flag_id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', background: 'var(--bad-b)', borderRadius: 'var(--r-sm)', border: '1px solid rgba(198,40,40,.15)' }}>
-                    <span style={{ fontSize: 12, color: 'var(--bad)' }}>{f.flag_type.replace(/_/g, ' ')}</span>
-                    <span className="badge badge-bad">{f.severity}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          )}
         </div>
       </div>
 
-      {/* Decision panel */}
-      <div className="card">
-        <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.08em', textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 16 }}>
-          Decision
+      {/* ── Row 4: Eligibility (all 6 loan types) ─────────────────────────── */}
+      <div className="card" style={{ marginBottom: 20 }}>
+        <SectionHeader>Loan Eligibility — All Types</SectionHeader>
+        {eligibility.length > 0 ? (
+          <table className="tbl" style={{ marginTop: 0 }}>
+            <thead>
+              <tr>
+                <th>Loan Type</th>
+                <th>Eligible Amount</th>
+                <th>Applied Amount</th>
+                <th>Gap</th>
+                <th>Decision</th>
+              </tr>
+            </thead>
+            <tbody>
+              {eligibility.map(e => (
+                <tr key={e.loan_type}>
+                  <td style={{ textTransform: 'capitalize' }}>{e.loan_type.replace(/_/g, ' ')}</td>
+                  <td>₹{Number(e.eligible_amount ?? 0).toLocaleString('en-IN')}</td>
+                  <td>₹{Number(e.applied_amount ?? 0).toLocaleString('en-IN')}</td>
+                  <td style={{ color: Number(e.gap_amount) > 0 ? 'var(--bad)' : 'var(--ok)' }}>
+                    {Number(e.gap_amount ?? 0) > 0
+                      ? `₹${Number(e.gap_amount).toLocaleString('en-IN')} gap`
+                      : '✓ Covered'
+                    }
+                  </td>
+                  <td>
+                    <span className={`badge ${e.decision === 'eligible' ? 'badge-ok' : 'badge-bad'}`}>
+                      {e.decision ?? '—'}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : (
+          <div style={{ textAlign: 'center', padding: 32, color: 'var(--t3)', fontSize: 13 }}>
+            No eligibility data. Run the dbt pipeline.
+          </div>
+        )}
+      </div>
+
+      {/* ── Row 5: Previous Decisions ─────────────────────────────────────── */}
+      {decisions.length > 0 && (
+        <div className="card" style={{ marginBottom: 20 }}>
+          <SectionHeader>Decision History</SectionHeader>
+          {decisions.map(d => (
+            <div key={d.decision_id} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '8px 0', borderBottom: '1px solid var(--border-s)',
+            }}>
+              <div>
+                <span className={`badge ${d.decision === 'approved' ? 'badge-ok' : d.decision === 'rejected' ? 'badge-bad' : 'badge-warn'}`}>
+                  {d.decision}
+                </span>
+                {d.notes && <span style={{ fontSize: 12, color: 'var(--t2)', marginLeft: 10 }}>{d.notes.slice(0, 80)}</span>}
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--t3)' }}>
+                {new Date(d.decided_at).toLocaleDateString('en-IN')}
+              </span>
+            </div>
+          ))}
         </div>
+      )}
+
+      {/* ── Decision Panel ────────────────────────────────────────────────── */}
+      <div className="card" style={{ border: '1px solid var(--border)', boxShadow: 'var(--sh-md)' }}>
+        <SectionHeader>Make a Decision</SectionHeader>
+
         {!canDecide ? (
           <div className="alert alert-warn">
             <span>ℹ</span>
-            <span>This application is <strong>{app.status}</strong> — no further action required from analyst.</span>
+            <span>This application is <strong>{app.status}</strong> — no further analyst action required.</span>
           </div>
         ) : (
           <>
+            {/* Escalation rules summary */}
+            <div style={{ marginBottom: 16, padding: '10px 14px', background: 'var(--bg)', borderRadius: 'var(--r-sm)', fontSize: 12, color: 'var(--t2)' }}>
+              <strong>Rules:</strong>{' '}
+              Approve requires score &gt;65 and no fraud flags.{' '}
+              Reject requires score &lt;45 and no fraud flags.{' '}
+              Grey zone (45–65), fraud, or above-threshold amounts must be escalated.
+            </div>
+
+            {decisionError && (
+              <div className="alert alert-error" style={{ marginBottom: 12 }}>
+                <span>⚠</span><span>{decisionError}</span>
+              </div>
+            )}
+
             <div className="form-group">
-              <label className="form-label">Notes / Reason</label>
+              <label className="form-label" htmlFor="decision-notes">
+                Notes / Reason <span style={{ color: 'var(--t3)' }}>(required for escalation, min 10 chars)</span>
+              </label>
               <textarea
+                id="decision-notes"
                 className="form-input"
                 rows={3}
-                placeholder="Add decision notes (required for escalation)…"
+                placeholder="Describe your reasoning — mandatory for escalation…"
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
                 style={{ resize: 'vertical', fontFamily: 'var(--font)' }}
               />
             </div>
-            <div style={{ display: 'flex', gap: 10, marginTop: 8 }}>
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+              {/* Approve */}
               <button
+                id="btn-approve"
                 className="btn btn-primary"
-                disabled={submitting}
+                disabled={submitting || !canApprove}
+                title={!canApprove ? (hasFraud ? 'Cannot approve: fraud flags present' : `Score ${score?.toFixed(1)} ≤ 65 — must escalate`) : 'Approve this application'}
                 onClick={() => handleDecision('approved')}
+                style={{ background: canApprove ? '#2E7D32' : undefined, borderColor: canApprove ? '#2E7D32' : undefined }}
               >
                 {submitting ? <span className="spinner" /> : '✓'} Approve
               </button>
+
+              {/* Reject */}
               <button
+                id="btn-reject"
                 className="btn btn-danger"
-                disabled={submitting}
+                disabled={submitting || !canReject}
+                title={!canReject ? (hasFraud ? 'Cannot reject: fraud flags present' : `Score ${score?.toFixed(1)} ≥ 45 — must escalate`) : 'Reject this application'}
                 onClick={() => handleDecision('rejected')}
               >
                 {submitting ? <span className="spinner" /> : '✗'} Reject
               </button>
+
+              {/* Escalate */}
               <button
+                id="btn-escalate"
                 className="btn btn-secondary"
                 disabled={submitting}
                 onClick={() => handleDecision('escalated')}
                 style={{ marginLeft: 'auto' }}
+                title="Escalate to Bank Manager (notes required)"
               >
                 {submitting ? <span className="spinner" /> : '↑'} Escalate to Manager
               </button>
             </div>
+
+            {/* Show why approve/reject are disabled */}
+            {(!canApprove || !canReject) && canDecide && (
+              <div style={{ marginTop: 12, fontSize: 12, color: 'var(--t2)' }}>
+                {hasFraud && <div>⚠ Fraud flags detected — only escalation is allowed.</div>}
+                {!hasFraud && score !== null && score >= 45 && score <= 65 && (
+                  <div>⚠ Score {score.toFixed(1)} is in the grey zone (45–65) — escalation required.</div>
+                )}
+                {!hasFraud && score !== null && score > 65 && (
+                  <div>✓ Score qualifies for approval. Rejection not available at this score.</div>
+                )}
+                {!hasFraud && score !== null && score < 45 && (
+                  <div>✓ Score qualifies for rejection. Approval not available at this score.</div>
+                )}
+              </div>
+            )}
           </>
         )}
       </div>

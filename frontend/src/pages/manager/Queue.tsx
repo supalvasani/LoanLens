@@ -2,10 +2,12 @@
 // LoanLens — Manager: Escalations Queue
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardShell } from '../../components/DashboardShell';
-import { loanService } from '../../services/loanService';
+import { useManagerQueue } from '../../hooks/useManagerQueue';
+import { useApplication } from '../../hooks/useApplication';
+import { useLoanAction } from '../../hooks/useLoanAction';
 import type { LoanApplication, ApplicationFull, DecisionType } from '../../types/loan';
 
 function ReviewPanel({
@@ -20,7 +22,7 @@ function ReviewPanel({
   submitting: boolean;
 }) {
   const [notes, setNotes] = useState('');
-  const score = detail?.credit_score?.final_score;
+  const score = detail?.credit_score?.score;
   const scoreColor = score != null ? (score >= 70 ? 'var(--ok)' : score >= 45 ? 'var(--warn)' : 'var(--bad)') : 'var(--t3)';
 
   return (
@@ -45,10 +47,10 @@ function ReviewPanel({
           <div style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.07em', color: 'var(--t3)', marginBottom: 10 }}>Underwriter Summary</div>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px 24px' }}>
             {[
-              ['Monthly Income',      `₹${Number(detail.underwriter_report.monthly_income).toLocaleString('en-IN')}`],
-              ['Monthly Obligations', `₹${Number(detail.underwriter_report.monthly_obligations).toLocaleString('en-IN')}`],
-              ['EMI/Income Ratio',    `${(detail.underwriter_report.emi_to_income_ratio * 100).toFixed(1)}%`],
-              ['Risk Segment',        detail.underwriter_report.risk_segment.replace(/_/g, ' ')],
+              ['Avg Monthly Income',  `₹${Number(detail.underwriter_report.avg_monthly_income).toLocaleString('en-IN')}`],
+              ['Savings Potential',   `₹${Number(detail.underwriter_report.savings_potential).toLocaleString('en-IN')}`],
+              ['EMI/Income Ratio',    `${((detail.underwriter_report.emi_burden_ratio ?? 0) * 100).toFixed(1)}%`],
+              ['Risk Segment',        detail.underwriter_report.risk_segment ? detail.underwriter_report.risk_segment.replace(/_/g, ' ') : 'N/A'],
             ].map(([l, v]) => (
               <div key={l} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--border-s)' }}>
                 <span style={{ fontSize: 12, color: 'var(--t2)' }}>{l}</span>
@@ -96,39 +98,22 @@ function ReviewPanel({
 
 export default function ManagerQueue() {
   const navigate = useNavigate();
-  const [apps, setApps]           = useState<LoanApplication[]>([]);
-  const [loading, setLoading]     = useState(true);
-  const [error, setError]         = useState<string | null>(null);
-  const [selected, setSelected]   = useState<string | null>(null);
-  const [detail, setDetail]       = useState<ApplicationFull | null>(null);
-  const [loadingDetail, setLoadingDetail] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [done, setDone]           = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    loanService.getApplications()
-      .then(all => setApps(all.filter(a => a.status === 'escalated')))
-      .catch(() => setError('Failed to load escalations.'))
-      .finally(() => setLoading(false));
-  }, []);
+  const { apps, loading, error, markDone, done } = useManagerQueue();
+  const [selected, setSelected] = useState<string | null>(null);
+  const { data: detail, loading: loadingDetail } = useApplication(selected);
+  const { submitting, submitManager } = useLoanAction();
 
   function selectApp(id: string) {
-    setSelected(id); setDetail(null); setLoadingDetail(true);
-    loanService.getApplication(id)
-      .then(setDetail)
-      .catch(() => setError('Failed to load application detail.'))
-      .finally(() => setLoadingDetail(false));
+    setSelected(id);
   }
 
   async function handleDecide(decision: DecisionType, notes: string) {
     if (!selected) return;
-    setSubmitting(true);
-    try {
-      await loanService.decideManager(selected, decision, notes);
-      setDone(p => ({ ...p, [selected]: decision }));
+    const ok = await submitManager(selected, decision, notes);
+    if (ok) {
+      markDone(selected, decision);
       setSelected(null);
-    } catch { setError('Failed to submit decision.'); }
-    finally { setSubmitting(false); }
+    }
   }
 
   const pending = apps.filter(a => !done[a.application_id]);

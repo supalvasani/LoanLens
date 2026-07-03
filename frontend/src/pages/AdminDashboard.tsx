@@ -3,7 +3,7 @@
 // Full system overview: users, loans, revenue, decisions, audit trail
 // ──────────────────────────────────────────────────────────────────────────────
 
-import { useState } from 'react';
+
 import { DashboardShell } from '../components/DashboardShell';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -56,15 +56,12 @@ const riskClass: Record<string, string> = {
 
 export default function AdminDashboard() {
   const { user } = useAuth();
-  const [activeNav, setActiveNav] = useState('overview');
 
   return (
     <DashboardShell
       title="System Overview"
       subtitle={`Welcome back, ${user?.name} — ${new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}`}
-      activeNav={activeNav}
-      onNavChange={setActiveNav}
-      topbarActions={
+      actions={
         <div className="flex items-center gap-2">
           <span className="badge badge-admin">Admin</span>
           <button className="btn btn-ghost btn-sm">📥 Export</button>

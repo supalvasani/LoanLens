@@ -7,11 +7,13 @@ import { DashboardShell } from '../../components/DashboardShell';
 import { adminService } from '../../services/adminService';
 import type { AdminUserResponse } from '../../types/admin';
 
-const ROLE_BADGE: Record<string, string> = {
-  admin:     'background:rgba(99,102,241,.12);color:#6366f1;border-color:rgba(99,102,241,.25)',
-  manager:   'background:rgba(245,158,11,.12);color:#d97706;border-color:rgba(245,158,11,.25)',
-  analyst:   'background:rgba(56,189,248,.12);color:#0284c7;border-color:rgba(56,189,248,.25)',
-  applicant: 'background:rgba(34,197,94,.12);color:#16a34a;border-color:rgba(34,197,94,.25)',
+import { type CSSProperties } from 'react';
+
+const ROLE_BADGE: Record<string, CSSProperties> = {
+  admin:     { backgroundColor: 'rgba(99,102,241,.12)', color: '#6366f1', borderColor: 'rgba(99,102,241,.25)' },
+  manager:   { backgroundColor: 'rgba(245,158,11,.12)', color: '#d97706', borderColor: 'rgba(245,158,11,.25)' },
+  analyst:   { backgroundColor: 'rgba(56,189,248,.12)', color: '#0284c7', borderColor: 'rgba(56,189,248,.25)' },
+  applicant: { backgroundColor: 'rgba(34,197,94,.12)', color: '#16a34a', borderColor: 'rgba(34,197,94,.25)' },
 };
 
 const ROLES = ['admin', 'manager', 'analyst', 'applicant'];
@@ -176,7 +178,7 @@ export default function AdminUsers() {
                 </td>
                 <td style={{ color: 'var(--t2)', fontSize: 12 }}>{u.email}</td>
                 <td>
-                  <span className="badge" style={{ cssText: ROLE_BADGE[u.role] }}>
+                  <span className="badge" style={ROLE_BADGE[u.role]}>
                     {u.role}
                   </span>
                 </td>

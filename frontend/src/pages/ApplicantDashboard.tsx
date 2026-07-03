@@ -1,8 +1,3 @@
-// ──────────────────────────────────────────────────────────────────────────────
-// LoanLens — Applicant Dashboard
-// Own loan applications, status tracker, credit score widget, quick apply
-// ──────────────────────────────────────────────────────────────────────────────
-
 import { useState } from 'react';
 import { DashboardShell } from '../components/DashboardShell';
 import { useAuth } from '../contexts/AuthContext';
@@ -53,10 +48,9 @@ const LOAN_TYPES = [
 
 const CREDIT_SCORE = 712;
 const CREDIT_MAX   = 900;
-const CREDIT_ANGLE = Math.round((CREDIT_SCORE / CREDIT_MAX) * 240);
 
 function CreditScoreRing({ score }: { score: number }) {
-  const pct = score / 900;
+  const pct = score / CREDIT_MAX;
   const color = score < 550 ? 'var(--color-danger)' : score < 680 ? 'var(--color-warning)' : 'var(--color-success)';
   const label = score < 550 ? 'Poor' : score < 650 ? 'Fair' : score < 720 ? 'Good' : 'Excellent';
   const r = 52;
@@ -97,16 +91,13 @@ const statusStyle: Record<string, { cls: string; icon: string }> = {
 
 export default function ApplicantDashboard() {
   const { user } = useAuth();
-  const [activeNav, setActiveNav] = useState('overview');
   const [showApply, setShowApply] = useState(false);
 
   return (
     <DashboardShell
       title="My Dashboard"
       subtitle={`Hello, ${user?.name?.split(' ')[0]} 👋 — here's your loan overview`}
-      activeNav={activeNav}
-      onNavChange={setActiveNav}
-      topbarActions={
+      actions={
         <div className="flex items-center gap-2">
           <span className="badge badge-applicant">Applicant</span>
           <button className="btn btn-primary btn-sm" onClick={() => setShowApply(true)}>

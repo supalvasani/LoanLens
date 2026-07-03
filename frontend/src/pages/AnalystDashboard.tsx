@@ -47,7 +47,6 @@ const decClass: Record<string, string> = {
 
 export default function AnalystDashboard() {
   const { user } = useAuth();
-  const [activeNav, setActiveNav] = useState('overview');
   const [decidedApps, setDecidedApps] = useState<Record<string, string>>({});
 
   const decide = (id: string, decision: string) => {
@@ -58,9 +57,7 @@ export default function AnalystDashboard() {
     <DashboardShell
       title="Review Queue"
       subtitle={`Welcome, ${user?.name} — Credit Analyst`}
-      activeNav={activeNav}
-      onNavChange={setActiveNav}
-      topbarActions={
+      actions={
         <div className="flex items-center gap-2">
           <span className="badge badge-analyst">Credit Analyst</span>
           <div style={{ background: 'rgba(34,197,94,0.1)', border: '1px solid rgba(34,197,94,0.3)', borderRadius: 20, padding: '3px 10px', fontSize: 12, color: '#4ade80' }}>
