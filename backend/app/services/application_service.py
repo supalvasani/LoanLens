@@ -6,11 +6,13 @@ Repository layer handles all DB queries.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Any
+
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logger import logger
-from app.enums import ApplicationStatusEnum, RoleEnum
+from app.enums import ApplicationStatusEnum, LoanTypeEnum, RoleEnum
 from app.exceptions.domain import InsufficientPermissionsException, ResourceNotFoundException
 from app.models.user import User
 from app.repositories.application_repository import ApplicationRepository
