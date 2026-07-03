@@ -1,4 +1,4 @@
-// LoanLens — Loan & Decision Types (Phase 4)
+// LoanLens — Loan & Decision Types (matches actual backend schema)
 
 export type LoanType =
   | 'personal_loan'
@@ -17,31 +17,63 @@ export type ApplicationStatus =
 
 export type DecisionType = 'approved' | 'rejected' | 'escalated';
 
-export type RiskTier = 'very_low' | 'low' | 'medium' | 'high' | 'very_high';
-
 // ── Application ──────────────────────────────────────────────────────────────
 
 export interface LoanApplication {
   application_id: string;
-  applicant_id: string;
+  user_id: string;
   loan_type: LoanType;
   amount_requested: number;
   purpose: string;
   status: ApplicationStatus;
   submitted_at: string;
-  updated_at: string;
 }
 
-export interface ApplicationFull {
-  application: LoanApplication;
-  credit_score: CreditScore | null;
-  fraud_flags: FraudFlag[];
-  eligibility: LoanEligibility | null;
-  underwriter_report: UnderwriterReport | null;
-  trend: MonthlyTrend[];
+// ── Mart Data (matches backend CreditScoreData, etc.) ────────────────────────
+
+export interface CreditScore {
+  applicant_id: string | null;
+  score: number | null;                       // field is "score" not "final_score"
+  income_stability_score: number | null;
+  emi_burden_score: number | null;
+  bounce_score: number | null;                // "bounce_score" not "bounce_rate_score"
+  balance_score: number | null;               // "balance_score" not "balance_stability_score"
+  recommendation: string | null;
+  score_breakdown_json: Record<string, unknown> | null;
+  computed_at: string | null;
 }
 
-// ── Decision ─────────────────────────────────────────────────────────────────
+export interface FraudFlag {
+  flag_type: string;
+  flag_detail: string;
+  severity: string;
+  detected_at: string | null;
+}
+
+export interface LoanEligibility {
+  loan_type: string;
+  eligible_amount: number | null;
+  applied_amount: number | null;
+  gap_amount: number | null;
+  gap_reason: string | null;
+  decision: string | null;                    // "eligible" | "ineligible"
+}
+
+export interface UnderwriterReport {
+  avg_monthly_income: number | null;          // not "monthly_income"
+  emi_burden_ratio: number | null;            // not "emi_to_income_ratio"
+  bounce_count: number | null;
+  bounce_rate: number | null;
+  savings_potential: number | null;
+  fraud_flags: Record<string, unknown>[];
+  risk_segment: string | null;
+}
+
+export interface MonthlyTrend {
+  month: string | null;
+  score: number | null;
+  trend_direction: string | null;
+}
 
 export interface Decision {
   decision_id: string;
@@ -49,57 +81,21 @@ export interface Decision {
   decided_by: string;
   decision: DecisionType;
   notes: string | null;
+  escalated_to: string | null;
   decided_at: string;
 }
 
-// ── Mart Data ─────────────────────────────────────────────────────────────────
+// ── Full Application Response ─────────────────────────────────────────────────
 
-export interface CreditScore {
-  applicant_id: string;
-  final_score: number;
-  risk_tier: RiskTier;
-  recommendation: string;
-  income_stability_score: number;
-  emi_burden_score: number;
-  bounce_rate_score: number;
-  balance_stability_score: number;
-  scored_at: string;
-}
-
-export interface FraudFlag {
-  flag_id: string;
-  applicant_id: string;
-  flag_type: string;
-  severity: 'low' | 'medium' | 'high';
-  flagged_at: string;
-}
-
-export interface LoanEligibility {
-  applicant_id: string;
-  loan_type: LoanType;
-  eligible_amount: number;
-  applied_amount: number;
-  gap_amount: number;
-  gap_reason: string | null;
-  is_eligible: boolean;
-}
-
-export interface UnderwriterReport {
-  applicant_id: string;
-  monthly_income: number;
-  monthly_obligations: number;
-  emi_to_income_ratio: number;
-  avg_monthly_balance: number;
-  bounce_rate: number;
-  loan_type: LoanType;
-  max_eligible_emi: number;
-  risk_segment: string;
-}
-
-export interface MonthlyTrend {
-  month: string;
-  score: number;
-  income: number;
+export interface ApplicationFull {
+  application: LoanApplication;
+  credit_score: CreditScore | null;
+  fraud_flags: FraudFlag[];
+  eligibility: LoanEligibility[];             // list, not single object
+  underwriter_report: UnderwriterReport | null;
+  monthly_trend: MonthlyTrend[];             // "monthly_trend" not "trend"
+  risk_tier: string | null;
+  decisions: Decision[];
 }
 
 // ── Loan Type Config ──────────────────────────────────────────────────────────
@@ -112,18 +108,4 @@ export interface LoanTypeConfig {
   manager_threshold_amount: number;
   interest_rate_base: number;
   max_tenure_months: number;
-}
-
-// ── Audit Log ─────────────────────────────────────────────────────────────────
-
-export interface AuditLogEntry {
-  log_id: string;
-  actor_id: string;
-  actor_name?: string;
-  action: string;
-  target_type: string;
-  target_id: string;
-  old_value: string | null;
-  new_value: string | null;
-  logged_at: string;
 }

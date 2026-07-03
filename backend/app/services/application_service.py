@@ -85,6 +85,108 @@ class ApplicationService:
         )
         return LoanApplicationResponse.model_validate(application)
 
+    async def create_application_with_file(
+        self,
+        *,
+        current_user: User,
+        loan_type: LoanTypeEnum,
+        amount_requested: Decimal,
+        purpose: str,
+        file: Any = None,
+    ) -> LoanApplicationResponse:
+        import uuid
+        from decimal import Decimal, InvalidOperation
+        from datetime import date, datetime, timezone
+        import csv
+        import io
+        from app.exceptions.domain import DomainException
+        from sqlalchemy import text
+        from app.models.loan import RawApplicant
+
+        if current_user.role != RoleEnum.applicant:
+            raise InsufficientPermissionsException()
+
+        # Resolve applicant_id
+        applicant_id = await self.mart_repo.get_applicant_id_for_user(current_user.user_id)
+        if not applicant_id:
+            # Auto-create if missing
+            applicant_id = uuid.uuid4()
+            self.session.add(
+                RawApplicant(
+                    raw_applicant_id=applicant_id,
+                    applicant_ref=f"APP_{str(current_user.user_id)[:8].upper()}",
+                    name=current_user.name,
+                    pan_number="ABCDE1234F",
+                    phone="+919999999999",
+                    city="Mumbai",
+                    monthly_income_declared=Decimal("50000.00"),
+                    user_id=current_user.user_id,
+                )
+            )
+            await self.session.flush()
+
+        # Create application
+        application = await self.app_repo.create(
+            user_id=current_user.user_id,
+            loan_type=loan_type,
+            amount_requested=amount_requested,
+            purpose=purpose,
+        )
+
+        await self.audit_repo.insert(
+            user_id=current_user.user_id,
+            action="application_submitted",
+            target_type="raw_loan_applications",
+            target_id=str(application.application_id),
+            new_value={
+                "loan_type": loan_type.value,
+                "amount_requested": str(amount_requested),
+                "purpose": purpose,
+            },
+        )
+
+        # Ingest statement if file provided
+        if file is not None:
+            raw_bytes = await file.read()
+            if raw_bytes:
+                text_content = raw_bytes.decode("utf-8-sig")
+                reader = csv.DictReader(io.StringIO(text_content))
+                INSERT_SQL = text("""
+                    INSERT INTO raw_transactions
+                        (raw_id, applicant_id, txn_date, amount, txn_type, description, balance_after, ingested_at)
+                    VALUES
+                        (:raw_id, :applicant_id, :txn_date, :amount, :txn_type, :description, :balance_after, :ingested_at)
+                    ON CONFLICT (raw_id) DO NOTHING
+                """)
+                for row in reader:
+                    # Basic validation of columns
+                    raw_date = row.get("txn_date", "").strip()
+                    try:
+                        txn_date = date.fromisoformat(raw_date)
+                        amount_val = Decimal(row.get("amount", "").strip())
+                        txn_type = row.get("txn_type", "").strip().lower()
+                        balance_after = Decimal(row.get("balance_after", "").strip())
+                        description = row.get("description", "").strip()[:255] or "—"
+                        
+                        await self.session.execute(
+                            INSERT_SQL,
+                            {
+                                "raw_id":       str(uuid.uuid4()),
+                                "applicant_id": str(applicant_id),
+                                "txn_date":     txn_date,
+                                "amount":       amount_val,
+                                "txn_type":     txn_type,
+                                "description":  description,
+                                "balance_after": balance_after,
+                                "ingested_at":  datetime.now(timezone.utc),
+                            }
+                        )
+                    except Exception:
+                        continue
+
+        await self.session.commit()
+        return LoanApplicationResponse.model_validate(application)
+
     # ── List Applications ─────────────────────────────────────────────────────
 
     async def list_applications(
@@ -107,6 +209,53 @@ class ApplicationService:
             offset=offset,
         )
         return [LoanApplicationResponse.model_validate(a) for a in applications]
+
+    async def get_my_applications(
+        self,
+        current_user: User,
+    ) -> list[dict]:
+        if current_user.role != RoleEnum.applicant:
+            raise InsufficientPermissionsException()
+
+        # Fetch applications for this user
+        apps = await self.app_repo.get_all(current_user=current_user)
+
+        res = []
+        for app in apps:
+            reason = None
+            if app.status == ApplicationStatusEnum.rejected:
+                # Find last decision notes
+                decisions = await self.decision_repo.get_all_for_application(app.application_id)
+                rejections = [d for d in decisions if d.decision.value == "rejected"]
+                if rejections:
+                    # Use the latest rejection notes
+                    reason = rejections[-1].notes
+                if not reason:
+                    # Fallback to credit score recommendation or gap reason
+                    applicant_id = await self.mart_repo.get_applicant_id_for_user(current_user.user_id)
+                    if applicant_id:
+                        elig = await self.mart_repo.get_loan_eligibility(applicant_id, app.loan_type.value)
+                        if elig and elig[0].get("gap_reason"):
+                            from app.api.v1.routes.eligibility import GAP_REASON_LABELS
+                            raw_gap = elig[0]["gap_reason"]
+                            reason = GAP_REASON_LABELS.get(raw_gap, raw_gap.replace("_", " ").title())
+                        else:
+                            score_row = await self.mart_repo.get_credit_score(applicant_id)
+                            if score_row and score_row.get("recommendation"):
+                                reason = score_row["recommendation"]
+                
+                if not reason:
+                    reason = "Application did not meet NBFC risk thresholds"
+
+            res.append({
+                "application_id": app.application_id,
+                "loan_type": app.loan_type,
+                "amount_requested": app.amount_requested,
+                "status": app.status,
+                "submitted_at": app.submitted_at,
+                "primary_rejection_reason": reason,
+            })
+        return res
 
     # ── Get Single Application (with mart data) ───────────────────────────────
 

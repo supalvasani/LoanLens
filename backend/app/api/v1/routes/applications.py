@@ -25,6 +25,22 @@ from app.services.application_service import ApplicationService
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
 
+from decimal import Decimal
+from fastapi import APIRouter, Depends, Query, Request, status, File, Form, UploadFile
+from pydantic import BaseModel
+from uuid import UUID
+from datetime import datetime
+from app.enums import LoanTypeEnum
+
+class MyLoanApplicationResponse(BaseModel):
+    application_id: UUID
+    loan_type: LoanTypeEnum
+    amount_requested: Decimal
+    status: ApplicationStatusEnum
+    submitted_at: datetime
+    primary_rejection_reason: str | None
+
+
 # ── POST /applications/apply ─────────────────────────────────────────────────
 
 @router.post(
@@ -36,12 +52,58 @@ router = APIRouter(prefix="/applications", tags=["Applications"])
 @limiter.limit("5/minute")
 async def apply_for_loan(
     request: Request,
-    payload: LoanApplicationRequest,
+    loan_type: Optional[LoanTypeEnum] = Form(None),
+    amount_requested: Optional[Decimal] = Form(None),
+    purpose: Optional[str] = Form(None),
+    bank_statement_csv: Optional[UploadFile] = File(None),
     current_user: User = Depends(require_role(RoleEnum.applicant)),
     db: AsyncSession = Depends(get_db),
 ) -> LoanApplicationResponse:
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        payload = await request.json()
+        loan_type_val = LoanTypeEnum(payload.get("loan_type"))
+        amount_requested_val = Decimal(str(payload.get("amount_requested")))
+        purpose_val = payload.get("purpose")
+        file_val = None
+    else:
+        from fastapi import HTTPException
+        if not loan_type or not amount_requested or not purpose:
+            raise HTTPException(status_code=400, detail="Missing required form fields")
+        loan_type_val = loan_type
+        amount_requested_val = amount_requested
+        purpose_val = purpose
+        file_val = bank_statement_csv
+
     try:
-        return await ApplicationService(db).create_application(current_user, payload)
+        return await ApplicationService(db).create_application_with_file(
+            current_user=current_user,
+            loan_type=loan_type_val,
+            amount_requested=amount_requested_val,
+            purpose=purpose_val,
+            file=file_val,
+        )
+    except DomainException as exc:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+# ── GET /applications/my ─────────────────────────────────────────────────────
+
+@router.get(
+    "/my",
+    response_model=list[MyLoanApplicationResponse],
+    summary="Get own applications only (applicant only)",
+)
+@limiter.limit("60/minute")
+async def get_my_applications_route(
+    request: Request,
+    current_user: User = Depends(require_role(RoleEnum.applicant)),
+    db: AsyncSession = Depends(get_db),
+) -> list[MyLoanApplicationResponse]:
+    try:
+        res = await ApplicationService(db).get_my_applications(current_user)
+        return [MyLoanApplicationResponse(**r) for r in res]
     except DomainException as exc:
         from fastapi import HTTPException
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc

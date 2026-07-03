@@ -1,32 +1,52 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { lazy, Suspense } from 'react';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { RequireAuth, RequireRole, roleRedirect } from './utils/routeGuard';
 
-import LoginPage        from './pages/LoginPage';
-import RegisterPage     from './pages/RegisterPage';
+import LoginPage    from './pages/LoginPage';
+import RegisterPage from './pages/RegisterPage';
 
-// Portal (Applicant)
-import PortalDashboard from './pages/portal/Dashboard';
-import PortalApply     from './pages/portal/Apply';
-import PortalScore     from './pages/portal/Score';
-import PortalEligibility from './pages/portal/Eligibility';
+// ── Portal (Applicant) ────────────────────────────────────────────────────────────────────────────────
+const PortalDashboard   = lazy(() => import('./pages/portal/Dashboard'));
+const PortalApply       = lazy(() => import('./pages/portal/Apply'));
+const PortalScore       = lazy(() => import('./pages/portal/Score'));
+const PortalEligibility = lazy(() => import('./pages/portal/Eligibility'));
+const PortalChatbot     = lazy(() => import('./pages/portal/Chatbot'));
+const PortalStatements  = lazy(() => import('./pages/portal/Statements'));
 
-// Admin
-import AdminDashboard from './pages/admin/Dashboard';
+// ── Admin ────────────────────────────────────────────────────────────────────
+import AdminDashboard   from './pages/AdminDashboard';
+import AdminUsers       from './pages/admin/Users';
+import AdminConfig      from './pages/admin/Config';
+import AdminAuditLog    from './pages/admin/AuditLog';
 
-// Manager
+// ── Manager ──────────────────────────────────────────────────────────────────
 import ManagerDashboard from './pages/manager/Dashboard';
 import ManagerPortfolio from './pages/manager/Portfolio';
+import ManagerQueue     from './pages/manager/Queue';
 
-// Analyst
-import AnalystDashboard from './pages/analyst/Dashboard';
+// ── Analyst ──────────────────────────────────────────────────────────────────
+import AnalystDashboard       from './pages/analyst/Dashboard';
+import AnalystQueue           from './pages/analyst/Queue';
+import ApplicationDetail      from './pages/analyst/ApplicationDetail';
 
-// Root redirect
+// ── Root redirect ─────────────────────────────────────────────────────────────
 function RootRedirect() {
   const { isAuthenticated, user, isLoading } = useAuth();
   if (isLoading) return null;
   if (!isAuthenticated || !user) return <Navigate to="/login" replace />;
   return <Navigate to={roleRedirect[user.role] ?? '/login'} replace />;
+}
+
+import type { Role } from './types/auth';
+
+// ── Route wrapper helper ───────────────────────────────────────────────────────
+function R({ roles, children }: { roles: Role[]; children: React.ReactNode }) {
+  return (
+    <RequireAuth>
+      <RequireRole allowedRoles={roles}>{children}</RequireRole>
+    </RequireAuth>
+  );
 }
 
 export default function App() {
@@ -38,30 +58,33 @@ export default function App() {
           <Route path="/login"    element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
 
-          {/* Portal (Applicant) */}
-          <Route path="/portal/dashboard" element={<RequireAuth><RequireRole allowedRoles={['applicant']}><PortalDashboard /></RequireRole></RequireAuth>} />
-          <Route path="/portal/apply"     element={<RequireAuth><RequireRole allowedRoles={['applicant']}><PortalApply /></RequireRole></RequireAuth>} />
-          <Route path="/portal/score"     element={<RequireAuth><RequireRole allowedRoles={['applicant']}><PortalScore /></RequireRole></RequireAuth>} />
-          <Route path="/portal/eligibility" element={<RequireAuth><RequireRole allowedRoles={['applicant']}><PortalEligibility /></RequireRole></RequireAuth>} />
-          
-          {/* Support Chat Placeholder */}
-          <Route path="/portal/chatbot" element={<RequireAuth><RequireRole allowedRoles={['applicant']}><PortalDashboard /></RequireRole></RequireAuth>} />
+          {/* ── Portal (Applicant) ── */}
+          <Route path="/portal/dashboard"  element={<R roles={['applicant']}><Suspense fallback={null}><PortalDashboard /></Suspense></R>} />
+          <Route path="/portal/apply"      element={<R roles={['applicant']}><Suspense fallback={null}><PortalApply /></Suspense></R>} />
+          <Route path="/portal/score"      element={<R roles={['applicant']}><Suspense fallback={null}><PortalScore /></Suspense></R>} />
+          <Route path="/portal/eligibility" element={<R roles={['applicant']}><Suspense fallback={null}><PortalEligibility /></Suspense></R>} />
+          <Route path="/portal/chatbot"    element={<R roles={['applicant']}><Suspense fallback={null}><PortalChatbot /></Suspense></R>} />
+          <Route path="/portal/statements" element={<R roles={['applicant']}><Suspense fallback={null}><PortalStatements /></Suspense></R>} />
 
-          {/* Admin */}
-          <Route path="/admin/dashboard" element={<RequireAuth><RequireRole allowedRoles={['admin']}><AdminDashboard /></RequireRole></RequireAuth>} />
-          {/* Placeholders for admin sub-routes to avoid 404s for now */}
-          <Route path="/admin/*" element={<RequireAuth><RequireRole allowedRoles={['admin']}><AdminDashboard /></RequireRole></RequireAuth>} />
+          {/* ── Admin ── */}
+          <Route path="/admin/dashboard"   element={<R roles={['admin']}><AdminDashboard /></R>} />
+          <Route path="/admin/users"       element={<R roles={['admin']}><AdminUsers /></R>} />
+          <Route path="/admin/config"      element={<R roles={['admin']}><AdminConfig /></R>} />
+          <Route path="/admin/audit"       element={<R roles={['admin']}><AdminAuditLog /></R>} />
+          {/* Fallback for unbuilt admin sub-pages */}
+          <Route path="/admin/*"           element={<R roles={['admin']}><AdminDashboard /></R>} />
 
-          {/* Manager */}
-          <Route path="/manager/dashboard" element={<RequireAuth><RequireRole allowedRoles={['manager']}><ManagerDashboard /></RequireRole></RequireAuth>} />
-          <Route path="/manager/portfolio" element={<RequireAuth><RequireRole allowedRoles={['manager']}><ManagerPortfolio /></RequireRole></RequireAuth>} />
-          {/* Placeholders for manager sub-routes */}
-          <Route path="/manager/*" element={<RequireAuth><RequireRole allowedRoles={['manager']}><ManagerDashboard /></RequireRole></RequireAuth>} />
+          {/* ── Manager ── */}
+          <Route path="/manager/dashboard" element={<R roles={['manager']}><ManagerDashboard /></R>} />
+          <Route path="/manager/portfolio" element={<R roles={['manager']}><ManagerPortfolio /></R>} />
+          <Route path="/manager/queue"     element={<R roles={['manager']}><ManagerQueue /></R>} />
+          <Route path="/manager/*"         element={<R roles={['manager']}><ManagerDashboard /></R>} />
 
-          {/* Analyst */}
-          <Route path="/analyst/dashboard" element={<RequireAuth><RequireRole allowedRoles={['analyst']}><AnalystDashboard /></RequireRole></RequireAuth>} />
-          {/* Placeholders for analyst sub-routes */}
-          <Route path="/analyst/*" element={<RequireAuth><RequireRole allowedRoles={['analyst']}><AnalystDashboard /></RequireRole></RequireAuth>} />
+          {/* ── Analyst ── */}
+          <Route path="/analyst/dashboard"              element={<R roles={['analyst']}><AnalystDashboard /></R>} />
+          <Route path="/analyst/queue"                  element={<R roles={['analyst']}><AnalystQueue /></R>} />
+          <Route path="/analyst/applications/:id"       element={<R roles={['analyst']}><ApplicationDetail /></R>} />
+          <Route path="/analyst/*"                      element={<R roles={['analyst']}><AnalystDashboard /></R>} />
 
           {/* Root */}
           <Route path="/" element={<RootRedirect />} />

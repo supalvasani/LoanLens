@@ -28,7 +28,8 @@ const navByRole: Record<Role, { icon: string; label: string; path: string }[]> =
     { icon: '◉', label: 'Apply Now',    path: '/portal/apply' },
     { icon: '◎', label: 'Credit Score', path: '/portal/score' },
     { icon: '◇', label: 'Eligibility',  path: '/portal/eligibility' },
-    { icon: '◈', label: 'Support',      path: '/portal/chatbot' },
+    { icon: '◈', label: 'Statements',   path: '/portal/statements' },
+    { icon: '◉', label: 'Support',      path: '/portal/chatbot' },
   ],
 };
 

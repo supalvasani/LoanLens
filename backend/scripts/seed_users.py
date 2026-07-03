@@ -59,11 +59,32 @@ async def seed() -> None:
                 )
             )
             created += 1
+        # Ensure Amit Applicant has a RawApplicant profile
+        from sqlalchemy import text
+        from decimal import Decimal
+        amit_uid = uuid.UUID("a0000000-0000-4000-8000-000000000004")
+        res = await session.execute(text("SELECT 1 FROM raw_applicants WHERE user_id = :uid"), {"uid": str(amit_uid)})
+        if not res.scalar():
+            from app.models.loan import RawApplicant
+            session.add(
+                RawApplicant(
+                    raw_applicant_id=uuid.uuid4(),
+                    applicant_ref="APP_AMIT_PORTAL",
+                    name="Amit Applicant",
+                    pan_number="ABCDE1234F",
+                    phone="+919999999999",
+                    city="Mumbai",
+                    monthly_income_declared=Decimal("75000.00"),
+                    user_id=amit_uid,
+                )
+            )
+            created += 1
+
         if created:
             await session.commit()
-            print(f"Seeded {created} user(s)")
+            print(f"Seeded {created} user/profile(s)")
         else:
-            print("Seed users already present — skipped")
+            print("Seed users & profiles already present — skipped")
 
 
 if __name__ == "__main__":
