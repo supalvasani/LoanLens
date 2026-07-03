@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="bounce_score", model=get_where_subquery(ref('int_bounce_history'))) }}

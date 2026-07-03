@@ -1,0 +1,1 @@
+{{ test_accepted_values(column_name="txn_type", model=get_where_subquery(ref('int_transactions_categorized')), values=["credit","debit"]) }}

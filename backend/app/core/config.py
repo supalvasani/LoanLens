@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRY_HOURS: int = 8
     REFRESH_TOKEN_EXPIRY_DAYS: int = 7
-    CORS_ORIGINS: str = "http://localhost:5173"
+    CORS_ORIGINS: str = "http://localhost:5173,http://localhost:5174"
     
     LOG_LEVEL: str = "DEBUG"
     LOG_BACKUP_COUNT: int = 72

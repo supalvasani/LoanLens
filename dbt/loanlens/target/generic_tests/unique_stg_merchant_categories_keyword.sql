@@ -1,0 +1,1 @@
+{{ test_unique(column_name="keyword", model=get_where_subquery(ref('stg_merchant_categories'))) }}

@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="applicant_id", model=get_where_subquery(ref('int_combined_signals'))) }}

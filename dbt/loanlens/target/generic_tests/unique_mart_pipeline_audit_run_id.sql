@@ -1,0 +1,1 @@
+{{ test_unique(column_name="run_id", model=get_where_subquery(ref('mart_pipeline_audit'))) }}

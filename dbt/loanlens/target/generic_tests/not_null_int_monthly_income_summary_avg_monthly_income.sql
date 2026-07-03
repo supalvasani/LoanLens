@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="avg_monthly_income", model=get_where_subquery(ref('int_monthly_income_summary'))) }}

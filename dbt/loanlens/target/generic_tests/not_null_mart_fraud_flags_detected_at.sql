@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="detected_at", model=get_where_subquery(ref('mart_fraud_flags'))) }}

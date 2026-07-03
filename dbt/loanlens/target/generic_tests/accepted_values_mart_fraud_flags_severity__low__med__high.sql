@@ -1,0 +1,1 @@
+{{ test_accepted_values(column_name="severity", model=get_where_subquery(ref('mart_fraud_flags')), values=["low","med","high"]) }}

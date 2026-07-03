@@ -68,12 +68,16 @@ async def health() -> JSONResponse:
 
 
 # ── Routers ────────────────────────────────────────────────────────────────────
-from app.api.v1.routes.auth import router as auth_router  # noqa: E402
-from app.api.v1.routes.users import router as users_router  # noqa: E402
+from app.api.v1.routes.auth         import router as auth_router          # noqa: E402
+from app.api.v1.routes.users        import router as users_router         # noqa: E402
 from app.api.v1.routes.applications import router as applications_router  # noqa: E402
-from app.api.v1.routes.decisions import router as decisions_router  # noqa: E402
+from app.api.v1.routes.decisions    import router as decisions_router     # noqa: E402
+from app.api.v1.routes.admin        import router as admin_router         # noqa: E402
+from app.api.v1.routes.chatbot      import router as chatbot_router       # noqa: E402
 
-app.include_router(auth_router, prefix="/api/v1")
-app.include_router(users_router, prefix="/api/v1")
+app.include_router(auth_router,         prefix="/api/v1")
+app.include_router(users_router,        prefix="/api/v1")
 app.include_router(applications_router, prefix="/api/v1")
-app.include_router(decisions_router, prefix="/api/v1")
+app.include_router(decisions_router,    prefix="/api/v1")
+app.include_router(admin_router,        prefix="/api/v1")
+app.include_router(chatbot_router,      prefix="/api/v1")

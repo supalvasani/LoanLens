@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="trend_direction", model=get_where_subquery(ref('mart_monthly_credit_trend'))) }}

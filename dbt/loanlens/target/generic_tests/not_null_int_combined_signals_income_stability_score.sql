@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="income_stability_score", model=get_where_subquery(ref('int_combined_signals'))) }}

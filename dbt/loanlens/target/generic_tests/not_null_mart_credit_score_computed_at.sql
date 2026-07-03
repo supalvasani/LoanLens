@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="computed_at", model=get_where_subquery(ref('mart_credit_score'))) }}

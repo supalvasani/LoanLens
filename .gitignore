@@ -26,3 +26,6 @@ logs/
 # OS Files
 .DS_Store
 Thumbs.db
+
+# Metabase Local Download
+metabase/

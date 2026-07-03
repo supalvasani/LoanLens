@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="raw_applicant_id", model=get_where_subquery(ref('stg_applicants'))) }}

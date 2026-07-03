@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="amount", model=get_where_subquery(ref('stg_transactions'))) }}

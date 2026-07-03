@@ -4,7 +4,7 @@ loanlens:
     dev:
       type: postgres
       host: "{{ env_var('DBT_HOST', '127.0.0.1') }}"
-      port: "{{ env_var('DBT_PORT', '5432') | int }}"
+      port: "{{ env_var('DBT_PORT', '5433') | int }}"
       user: "{{ env_var('DBT_USER', 'postgres') }}"
       password: "{{ env_var('DBT_PASSWORD', 'admin') }}"
       dbname: "{{ env_var('DBT_DBNAME', 'loanlens_db') }}"

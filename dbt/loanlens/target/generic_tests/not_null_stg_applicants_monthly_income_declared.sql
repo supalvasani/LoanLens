@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="monthly_income_declared", model=get_where_subquery(ref('stg_applicants'))) }}

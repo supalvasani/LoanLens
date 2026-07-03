@@ -1,0 +1,1 @@
+{{ test_not_null(column_name="balance_score", model=get_where_subquery(ref('int_balance_trends'))) }}

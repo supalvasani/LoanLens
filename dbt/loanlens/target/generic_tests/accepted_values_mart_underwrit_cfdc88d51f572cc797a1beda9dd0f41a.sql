@@ -1,0 +1,1 @@
+{{ test_accepted_values(column_name="risk_segment", model=get_where_subquery(ref('mart_underwriter_report')), values=["low","medium","high"]) }}
