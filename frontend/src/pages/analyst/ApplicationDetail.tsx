@@ -273,7 +273,7 @@ export default function ApplicationDetail() {
                 <YAxis domain={[0, 100]} tick={{ fontSize: 11, fill: 'var(--t3)' }} />
                 <Tooltip
                   contentStyle={{ fontSize: 12, background: 'var(--surface)', border: '1px solid var(--border)' }}
-                  formatter={(v: any) => [`${v}/100`, 'Score']}
+                  formatter={(v: unknown) => [`${v}/100`, 'Score']}
                 />
                 <Bar dataKey="value" radius={[3, 3, 0, 0]}>
                   {scoreBarData.map((entry, index) => (
@@ -298,7 +298,7 @@ export default function ApplicationDetail() {
                   <YAxis domain={[0, 100]} tick={{ fontSize: 10, fill: 'var(--t3)' }} />
                   <Tooltip
                     contentStyle={{ fontSize: 12, background: 'var(--surface)', border: '1px solid var(--border)' }}
-                    formatter={(v: any) => [`${v}`, 'Score']}
+                    formatter={(v: unknown) => [`${v}`, 'Score']}
                   />
                   <Line
                     type="monotone" dataKey="score"

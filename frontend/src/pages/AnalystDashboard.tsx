@@ -5,7 +5,7 @@
 
 import { useState } from 'react';
 import { DashboardShell } from '../components/DashboardShell';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 const STATS = [
   { icon: '📥', label: 'In My Queue',      value: '18',   trend: '+3', dir: 'warn', bg: 'rgba(99,102,241,0.15)',  color: '#818cf8' },

@@ -5,7 +5,6 @@
 
 import {
   createContext,
-  useContext,
   useEffect,
   useState,
   useCallback,
@@ -13,7 +12,7 @@ import {
 } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { authService } from '../services/authService';
-import type { AuthState, LoginRequest, Role, TokenPayload } from '../types/auth';
+import type { AuthState, LoginRequest, TokenPayload } from '../types/auth';
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -22,20 +21,10 @@ interface AuthContextValue extends AuthState {
   logout: () => void;
 }
 
-// ── Context ──────────────────────────────────────────────────────────────────
-
-const AuthContext = createContext<AuthContextValue | null>(null);
+// eslint-disable-next-line react-refresh/only-export-components
+export const AuthContext = createContext<AuthContextValue | null>(null);
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
-
-function getRoleFromToken(token: string): Role | null {
-  try {
-    const decoded = jwtDecode<TokenPayload>(token);
-    return decoded.role ?? null;
-  } catch {
-    return null;
-  }
-}
 
 function isTokenExpired(token: string): boolean {
   try {
@@ -137,13 +126,5 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 }
 
-// ── Hook ─────────────────────────────────────────────────────────────────────
 
-export function useAuth(): AuthContextValue {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error('useAuth must be used inside <AuthProvider>');
-  return ctx;
-}
 
-// Re-export helpers for route guard
-export { getRoleFromToken, isTokenExpired };

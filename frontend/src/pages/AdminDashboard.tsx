@@ -5,7 +5,7 @@
 
 
 import { DashboardShell } from '../components/DashboardShell';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 const STATS = [
   { icon: '👥', label: 'Total Users',       value: '1,248',  trend: '+12%', dir: 'up',   bg: 'rgba(99,102,241,0.15)',  color: '#818cf8' },

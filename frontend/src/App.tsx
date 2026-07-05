@@ -1,7 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { lazy, Suspense } from 'react';
-import { AuthProvider, useAuth } from './contexts/AuthContext';
-import { RequireAuth, RequireRole, roleRedirect } from './utils/routeGuard';
+import { AuthProvider } from './contexts/AuthContext';
+import { useAuth } from './hooks/useAuth';
+import { RequireAuth, RequireRole } from './utils/routeGuard';
 
 import LoginPage    from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
@@ -39,7 +40,8 @@ function RootRedirect() {
   return <Navigate to={roleRedirect[user.role] ?? '/login'} replace />;
 }
 
-import type { Role } from './types/auth';
+import { type Role, roleRedirect } from './types/auth';
+
 
 // ── Route wrapper helper ───────────────────────────────────────────────────────
 function R({ roles, children }: { roles: Role[]; children: React.ReactNode }) {

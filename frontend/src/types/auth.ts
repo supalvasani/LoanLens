@@ -45,3 +45,12 @@ export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
 }
+
+// Map each role to its home dashboard
+export const roleRedirect: Record<Role, string> = {
+  admin:     '/admin/dashboard',
+  manager:   '/manager/dashboard',
+  analyst:   '/analyst/dashboard',
+  applicant: '/portal/dashboard',
+};
+

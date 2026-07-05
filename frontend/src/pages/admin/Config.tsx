@@ -93,21 +93,25 @@ export default function AdminConfig() {
   const [editing,  setEditing]  = useState<AdminConfigResponse | null>(null);
   const [saved,    setSaved]    = useState<string | null>(null);
 
-  function load() {
-    setLoading(true);
+  function loadInit() {
     adminService.listConfigs()
       .then(setConfigs)
       .catch(() => setError('Failed to load config.'))
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, []);
+  function loadWithLoading() {
+    setLoading(true);
+    loadInit();
+  }
+
+  useEffect(() => { loadInit(); }, []);
 
   function handleSaved() {
     setEditing(null);
     setSaved('Configuration updated successfully.');
     setTimeout(() => setSaved(null), 3000);
-    load();
+    loadWithLoading();
   }
 
   const fmt = (n: number) => `₹${Number(n).toLocaleString('en-IN')}`;

@@ -1,6 +1,6 @@
 import { type ReactNode } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 import type { Role } from '../types/auth';
 
 const navByRole: Record<Role, { icon: string; label: string; path: string }[]> = {
@@ -47,7 +47,7 @@ function Sidebar() {
   const role = (user?.role ?? 'applicant') as Role;
   const items = navByRole[role] ?? [];
   const initials = user?.name
-    ? user.name.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2)
+    ? user.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
     : '??';
 
   return (

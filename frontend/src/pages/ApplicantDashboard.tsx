@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { DashboardShell } from '../components/DashboardShell';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from '../hooks/useAuth';
 
 const MY_APPLICATIONS = [
   {

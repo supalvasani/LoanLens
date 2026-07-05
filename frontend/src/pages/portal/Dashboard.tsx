@@ -5,7 +5,7 @@
 
 import { useNavigate, Link } from 'react-router-dom';
 import { DashboardShell } from '../../components/DashboardShell';
-import { useAuth } from '../../contexts/AuthContext';
+import { useAuth } from '../../hooks/useAuth';
 import { usePortalData } from '../../hooks/usePortalData';
 
 const STATUS_COLOR: Record<string, { bg: string; color: string; label: string }> = {

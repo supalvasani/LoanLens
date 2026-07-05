@@ -6,17 +6,25 @@ interface ChatbotProps {
   placeholder?: string;
 }
 
-export function ChatbotPanel({ mode, placeholder }: ChatbotProps) {
-  const [messages, setMessages] = useState<ChatMessage[]>([
+function getInitialMessages(mode: 'self' | 'analyst'): ChatMessage[] {
+  return [
     {
       role: 'bot',
       content:
         mode === 'self'
-          ? 'Hi! I\'m LoanBot. Ask me about your credit score, loan eligibility, or anything about your financial report.'
+          ? "Hi! I'm LoanBot. Ask me about your credit score, loan eligibility, or anything about your financial report."
           : 'LoanBot (Analyst Mode). Enter an applicant ID and ask a question about their credit report.',
       ts: Date.now(),
     },
-  ]);
+  ];
+}
+
+function createChatMessage(role: 'user' | 'bot', content: string): ChatMessage {
+  return { role, content, ts: Date.now() };
+}
+
+export function ChatbotPanel({ mode, placeholder }: ChatbotProps) {
+  const [messages, setMessages] = useState<ChatMessage[]>(() => getInitialMessages(mode));
   const [input, setInput]           = useState('');
   const [applicantId, setApplicantId] = useState('');
   const [loading, setLoading]       = useState(false);
@@ -32,17 +40,18 @@ export function ChatbotPanel({ mode, placeholder }: ChatbotProps) {
     if (!q) return;
     setError(null);
     setInput('');
-    setMessages(prev => [...prev, { role: 'user', content: q, ts: Date.now() }]);
+    setMessages(prev => [...prev, createChatMessage('user', q)]);
     setLoading(true);
     try {
       const res = await chatbotService.send(q, mode === 'analyst' ? applicantId || undefined : undefined);
-      setMessages(prev => [...prev, { role: 'bot', content: res.answer, ts: Date.now() }]);
+      setMessages(prev => [...prev, createChatMessage('bot', res.answer)]);
     } catch {
       setError('LoanBot is unavailable. Make sure the backend is running.');
     } finally {
       setLoading(false);
     }
   };
+
 
   const handleKey = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }

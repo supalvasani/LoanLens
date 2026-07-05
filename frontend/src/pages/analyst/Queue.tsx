@@ -127,6 +127,117 @@ function InlineActions({
   );
 }
 
+interface QueueTableProps {
+  rows: AnalystQueueItem[];
+  emptyMsg: string;
+  navigate: (path: string) => void;
+  markDone: (id: string, action: string) => void;
+}
+
+function QueueTable({ rows, emptyMsg, navigate, markDone }: QueueTableProps) {
+  return (
+    <table className="tbl">
+      <thead>
+        <tr>
+          <th>Applicant</th>
+          <th>Loan Type</th>
+          <th>Amount</th>
+          <th>Score</th>
+          <th>Risk</th>
+          <th>Status</th>
+          <th>Submitted</th>
+          <th>Quick Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.length === 0 ? (
+          <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--t3)' }}>{emptyMsg}</td></tr>
+        ) : rows.map(app => (
+          <tr
+            key={app.application_id}
+            style={{ cursor: 'pointer', background: app.has_fraud_flags ? 'var(--bad-b)' : undefined }}
+            onClick={() => navigate(`/analyst/applications/${app.application_id}`)}
+          >
+            {/* Applicant */}
+            <td>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                {app.has_fraud_flags && <span style={{ color: 'var(--bad)' }} title="Fraud flagged">⚠</span>}
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 13 }}>
+                    {app.applicant_name ?? `…${app.application_id.slice(-6)}`}
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--t3)', fontFamily: 'monospace' }}>
+                    {app.application_id.slice(0, 8)}…
+                  </div>
+                </div>
+              </div>
+            </td>
+
+            {/* Loan type */}
+            <td style={{ textTransform: 'capitalize', fontSize: 13 }}>
+              {app.loan_type.replace(/_/g, ' ')}
+            </td>
+
+            {/* Amount */}
+            <td style={{ fontVariantNumeric: 'tabular-nums' }}>
+              ₹{Number(app.amount_requested).toLocaleString('en-IN')}
+            </td>
+
+            {/* Score badge */}
+            <td>
+              {app.score !== null ? (
+                <span style={{
+                  display: 'inline-block', padding: '2px 8px',
+                  borderRadius: 4, fontWeight: 700, fontSize: 13,
+                  background: scoreBg(app.score),
+                  color: scoreColor(app.score),
+                }}>
+                  {app.score.toFixed(1)}
+                </span>
+              ) : <span style={{ color: 'var(--t3)' }}>—</span>}
+            </td>
+
+            {/* Risk */}
+            <td>
+              {app.risk_tier ? (
+                <span className={`badge ${app.risk_tier === 'high' ? 'badge-bad' : app.risk_tier === 'medium' ? 'badge-warn' : 'badge-ok'}`}>
+                  {app.risk_tier}
+                </span>
+              ) : <span style={{ color: 'var(--t3)' }}>—</span>}
+            </td>
+
+            {/* Status */}
+            <td>
+              <span className={`badge ${STATUS_BADGE[app.status] ?? ''}`}>
+                {app.status.replace(/_/g, ' ')}
+              </span>
+            </td>
+
+            {/* Submitted */}
+            <td style={{ color: 'var(--t3)', fontSize: 12 }}>
+              {new Date(app.submitted_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+            </td>
+
+            {/* Inline actions */}
+            <td onClick={e => e.stopPropagation()}>
+              {['pending', 'under_review'].includes(app.status) ? (
+                <InlineActions app={app} onDone={markDone} />
+              ) : (
+                <button
+                  className="btn btn-ghost btn-sm"
+                  onClick={() => navigate(`/analyst/applications/${app.application_id}`)}
+                >
+                  View →
+                </button>
+              )}
+            </td>
+          </tr>
+        ))}
+      </tbody>
+    </table>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 
 export default function AnalystQueue() {
@@ -137,109 +248,6 @@ export default function AnalystQueue() {
   const pending = filtered.filter((a: AnalystQueueItem) => ['pending', 'under_review'].includes(a.status));
   const other   = filtered.filter((a: AnalystQueueItem) => !['pending', 'under_review'].includes(a.status));
 
-  function QueueTable({ rows, emptyMsg }: { rows: AnalystQueueItem[]; emptyMsg: string }) {
-    return (
-      <table className="tbl">
-        <thead>
-          <tr>
-            <th>Applicant</th>
-            <th>Loan Type</th>
-            <th>Amount</th>
-            <th>Score</th>
-            <th>Risk</th>
-            <th>Status</th>
-            <th>Submitted</th>
-            <th>Quick Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr><td colSpan={8} style={{ textAlign: 'center', padding: 40, color: 'var(--t3)' }}>{emptyMsg}</td></tr>
-          ) : rows.map(app => (
-            <tr
-              key={app.application_id}
-              style={{ cursor: 'pointer', background: app.has_fraud_flags ? 'var(--bad-b)' : undefined }}
-              onClick={() => navigate(`/analyst/applications/${app.application_id}`)}
-            >
-              {/* Applicant */}
-              <td>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                  {app.has_fraud_flags && <span style={{ color: 'var(--bad)' }} title="Fraud flagged">⚠</span>}
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>
-                      {app.applicant_name ?? `…${app.application_id.slice(-6)}`}
-                    </div>
-                    <div style={{ fontSize: 10, color: 'var(--t3)', fontFamily: 'monospace' }}>
-                      {app.application_id.slice(0, 8)}…
-                    </div>
-                  </div>
-                </div>
-              </td>
-
-              {/* Loan type */}
-              <td style={{ textTransform: 'capitalize', fontSize: 13 }}>
-                {app.loan_type.replace(/_/g, ' ')}
-              </td>
-
-              {/* Amount */}
-              <td style={{ fontVariantNumeric: 'tabular-nums' }}>
-                ₹{Number(app.amount_requested).toLocaleString('en-IN')}
-              </td>
-
-              {/* Score badge */}
-              <td>
-                {app.score !== null ? (
-                  <span style={{
-                    display: 'inline-block', padding: '2px 8px',
-                    borderRadius: 4, fontWeight: 700, fontSize: 13,
-                    background: scoreBg(app.score),
-                    color: scoreColor(app.score),
-                  }}>
-                    {app.score.toFixed(1)}
-                  </span>
-                ) : <span style={{ color: 'var(--t3)' }}>—</span>}
-              </td>
-
-              {/* Risk */}
-              <td>
-                {app.risk_tier ? (
-                  <span className={`badge ${app.risk_tier === 'high' ? 'badge-bad' : app.risk_tier === 'medium' ? 'badge-warn' : 'badge-ok'}`}>
-                    {app.risk_tier}
-                  </span>
-                ) : <span style={{ color: 'var(--t3)' }}>—</span>}
-              </td>
-
-              {/* Status */}
-              <td>
-                <span className={`badge ${STATUS_BADGE[app.status] ?? ''}`}>
-                  {app.status.replace(/_/g, ' ')}
-                </span>
-              </td>
-
-              {/* Submitted */}
-              <td style={{ color: 'var(--t3)', fontSize: 12 }}>
-                {new Date(app.submitted_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
-              </td>
-
-              {/* Inline actions */}
-              <td onClick={e => e.stopPropagation()}>
-                {['pending', 'under_review'].includes(app.status) ? (
-                  <InlineActions app={app} onDone={markDone} />
-                ) : (
-                  <button
-                    className="btn btn-ghost btn-sm"
-                    onClick={() => navigate(`/analyst/applications/${app.application_id}`)}
-                  >
-                    View →
-                  </button>
-                )}
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    );
-  }
 
   return (
     <DashboardShell
@@ -278,7 +286,7 @@ export default function AnalystQueue() {
             <span className="spinner" style={{ marginRight: 8 }} />Loading…
           </div>
         ) : (
-          <QueueTable rows={pending} emptyMsg="No pending applications. Queue is clear!" />
+          <QueueTable rows={pending} emptyMsg="No pending applications. Queue is clear!" navigate={navigate} markDone={markDone} />
         )}
       </div>
 
@@ -289,7 +297,7 @@ export default function AnalystQueue() {
             <span style={{ fontWeight: 600, fontSize: 14 }}>Recently Closed</span>
             <span style={{ fontSize: 12, color: 'var(--t3)' }}>{other.length} case{other.length !== 1 ? 's' : ''}</span>
           </div>
-          <QueueTable rows={other} emptyMsg="" />
+          <QueueTable rows={other} emptyMsg="" navigate={navigate} markDone={markDone} />
         </div>
       )}
     </DashboardShell>

@@ -4,16 +4,9 @@
 // ──────────────────────────────────────────────────────────────────────────────
 
 import { Navigate, useLocation } from 'react-router-dom';
-import type { Role } from '../types/auth';
-import { useAuth } from '../contexts/AuthContext';
+import { type Role, roleRedirect } from '../types/auth';
+import { useAuth } from '../hooks/useAuth';
 
-// Map each role to its home dashboard
-export const roleRedirect: Record<Role, string> = {
-  admin:     '/admin/dashboard',
-  manager:   '/manager/dashboard',
-  analyst:   '/analyst/dashboard',
-  applicant: '/portal/dashboard',
-};
 
 // ── RequireAuth ───────────────────────────────────────────────────────────────
 // Blocks unauthenticated users — redirects to /login

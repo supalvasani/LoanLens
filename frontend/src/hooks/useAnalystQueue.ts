@@ -30,11 +30,22 @@ export function useAnalystQueue(params: AnalystQueueParams = {}): UseAnalystQueu
   const [done, setDone]     = useState<Record<string, string>>({});
   const [tick, setTick]     = useState(0);
 
-  useEffect(() => {
+  // Track dependencies to trigger loading state during render
+  const paramsKey = JSON.stringify(params);
+  const [prevParamsKey, setPrevParamsKey] = useState(paramsKey);
+  const [prevTick, setPrevTick] = useState(0);
+
+  if (paramsKey !== prevParamsKey || tick !== prevTick) {
+    setPrevParamsKey(paramsKey);
+    setPrevTick(tick);
     setLoading(true);
     setError(null);
+  }
+
+  useEffect(() => {
     loanService
       .listAnalystQueue({ sort_by: 'submitted_at', sort_dir: 'asc', limit: 200, ...params })
+
       .then(data => {
         // Priority sort: fraud-flagged first, then score ascending
         const sorted = [...data].sort((a, b) => {

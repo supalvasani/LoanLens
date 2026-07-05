@@ -32,22 +32,26 @@ export default function AdminUsers() {
   const [creating, setCreating]   = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
-  function load() {
-    setLoading(true);
+  function loadInit() {
     adminService.listUsers()
       .then(setUsers)
       .catch(() => setError('Failed to load users.'))
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { load(); }, []);
+  function loadWithLoading() {
+    setLoading(true);
+    loadInit();
+  }
+
+  useEffect(() => { loadInit(); }, []);
 
   async function toggleActive(u: AdminUserResponse) {
     setBusy(u.user_id);
     try {
       if (u.is_active) await adminService.deactivate(u.user_id);
       else             await adminService.reactivate(u.user_id);
-      load();
+      loadWithLoading();
     } catch { setError('Action failed.'); }
     finally { setBusy(null); }
   }
@@ -59,7 +63,7 @@ export default function AdminUsers() {
       await adminService.createUser(newUser);
       setShowCreate(false);
       setNewUser({ name: '', email: '', password: '', role: 'applicant' });
-      load();
+      loadWithLoading();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { detail?: string } } };
       setCreateError(axiosErr?.response?.data?.detail ?? 'Failed to create user.');

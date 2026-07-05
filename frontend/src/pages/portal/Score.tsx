@@ -211,7 +211,7 @@ export default function PortalScore() {
                   contentStyle={{ background: '#fff', border: '1px solid var(--border)', borderRadius: 6, fontSize: 13 }}
                   itemStyle={{ color: 'var(--ink)', fontWeight: 600 }}
                   labelStyle={{ color: 'var(--t3)', fontSize: 11 }}
-                  formatter={(v: any) => [v != null ? Number(v).toFixed(0) : '—', 'Score']}
+                  formatter={(v: unknown) => [v != null ? Number(v).toFixed(0) : '—', 'Score']}
                 />
                 <Line
                   type="monotone"

@@ -22,10 +22,18 @@ export function useManagerQueue(): UseManagerQueueReturn {
   const [done, setDone]     = useState<Record<string, string>>({});
   const [tick, setTick]     = useState(0);
 
-  useEffect(() => {
+  // Track dependencies to trigger loading state during render
+  const [prevTick, setPrevTick] = useState(0);
+
+  if (tick !== prevTick) {
+    setPrevTick(tick);
     setLoading(true);
     setError(null);
+  }
+
+  useEffect(() => {
     loanService
+
       .getApplications()
       .then(all => setApps(all.filter(a => a.status === 'escalated')))
       .catch(() => setError('Failed to load escalations.'))

@@ -1,7 +1,8 @@
 import { useState, type FormEvent } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import { roleRedirect } from '../utils/routeGuard';
+import { useAuth } from '../hooks/useAuth';
+import { roleRedirect } from '../types/auth';
+
 
 export default function LoginPage() {
   const { login, isAuthenticated, user } = useAuth();

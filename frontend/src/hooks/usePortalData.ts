@@ -22,9 +22,17 @@ export function usePortalData(): UsePortalDataReturn {
   const [loading, setLoading]     = useState(true);
   const [tick, setTick]           = useState(0);
 
-  useEffect(() => {
+  // Track dependencies to trigger loading state during render
+  const [prevTick, setPrevTick] = useState(0);
+
+  if (tick !== prevTick) {
+    setPrevTick(tick);
     setLoading(true);
+  }
+
+  useEffect(() => {
     Promise.allSettled([
+
       loanService.getMyApplications(),
       loanService.getMyCreditScore(),
       loanService.getMyEligibility(),

@@ -41,6 +41,19 @@ function recPill(rec: string | null): { label: string; color: string } {
   }
 }
 
+function SortIcon({
+  field,
+  sortBy,
+  sortDir,
+}: {
+  field: string;
+  sortBy: string | undefined;
+  sortDir: 'asc' | 'desc';
+}) {
+  if (sortBy !== field) return <span style={{ color: 'var(--t3)', marginLeft: 4 }}>⇅</span>;
+  return <span style={{ color: 'var(--ink)', marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+}
+
 const LOAN_TYPES = [
   'home_loan', 'personal_loan', 'auto_loan',
   'education_loan', 'two_wheeler_loan', 'business_loan',
@@ -64,31 +77,40 @@ export default function AnalystDashboard() {
   const [sortBy,      setSortBy]      = useState<AnalystQueueParams['sort_by']>('submitted_at');
   const [sortDir,     setSortDir]     = useState<'asc' | 'desc'>('desc');
 
-  const fetchQueue = useCallback(async () => {
+  // Track filter state fingerprint to adjust loading state during render
+  const filterKey = `${scoreMin}-${scoreMax}-${riskSeg.join(',')}-${loanType}-${recFilter}-${sortBy}-${sortDir}`;
+  const [prevFilterKey, setPrevFilterKey] = useState(filterKey);
+  if (filterKey !== prevFilterKey) {
+    setPrevFilterKey(filterKey);
     setLoading(true);
     setError(null);
-    try {
-      const params: AnalystQueueParams = {
-        sort_by:  sortBy,
-        sort_dir: sortDir,
-        limit:    200,
-      };
-      if (scoreMin > 0)       params.score_min    = scoreMin;
-      if (scoreMax < 100)     params.score_max    = scoreMax;
-      if (riskSeg.length === 1) params.risk_segment = riskSeg[0];
-      if (loanType)           params.loan_type    = loanType;
-      if (recFilter)          params.recommendation = recFilter;
+  }
 
-      const data = await loanService.listAnalystQueue(params);
-      setApps(data);
-    } catch {
-      setError('Failed to load application queue.');
-    } finally {
-      setLoading(false);
-    }
+  const fetchQueueInit = useCallback(() => {
+    const params: AnalystQueueParams = {
+      sort_by:  sortBy,
+      sort_dir: sortDir,
+      limit:    200,
+    };
+    if (scoreMin > 0)       params.score_min    = scoreMin;
+    if (scoreMax < 100)     params.score_max    = scoreMax;
+    if (riskSeg.length === 1) params.risk_segment = riskSeg[0];
+    if (loanType)           params.loan_type    = loanType;
+    if (recFilter)          params.recommendation = recFilter;
+
+    loanService.listAnalystQueue(params)
+      .then(setApps)
+      .catch(() => setError('Failed to load application queue.'))
+      .finally(() => setLoading(false));
   }, [scoreMin, scoreMax, riskSeg, loanType, recFilter, sortBy, sortDir]);
 
-  useEffect(() => { fetchQueue(); }, [fetchQueue]);
+  const fetchQueueWithLoading = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    await fetchQueueInit();
+  }, [fetchQueueInit]);
+
+  useEffect(() => { fetchQueueInit(); }, [fetchQueueInit]);
 
   // KPI counts
   const total     = apps.length;
@@ -110,17 +132,12 @@ export default function AnalystDashboard() {
     }
   }
 
-  function SortIcon({ field }: { field: string }) {
-    if (sortBy !== field) return <span style={{ color: 'var(--t3)', marginLeft: 4 }}>⇅</span>;
-    return <span style={{ color: 'var(--ink)', marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
-  }
-
   return (
     <DashboardShell
       title="Analyst Dashboard"
       subtitle="Credit review workload — all non-escalated applications"
       actions={
-        <button className="btn btn-secondary btn-sm" onClick={fetchQueue}>
+        <button className="btn btn-secondary btn-sm" onClick={fetchQueueWithLoading}>
           ↻ Refresh
         </button>
       }
@@ -264,13 +281,13 @@ export default function AnalystDashboard() {
               <tr>
                 <th>Applicant</th>
                 <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('submitted_at')}>
-                  Loan Type <SortIcon field="submitted_at" />
+                  Loan Type <SortIcon field="submitted_at" sortBy={sortBy} sortDir={sortDir} />
                 </th>
                 <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('amount_requested')}>
-                  Amount <SortIcon field="amount_requested" />
+                  Amount <SortIcon field="amount_requested" sortBy={sortBy} sortDir={sortDir} />
                 </th>
                 <th style={{ cursor: 'pointer' }} onClick={() => toggleSort('score')}>
-                  Score <SortIcon field="score" />
+                  Score <SortIcon field="score" sortBy={sortBy} sortDir={sortDir} />
                 </th>
                 <th>Risk</th>
                 <th>Recommendation</th>

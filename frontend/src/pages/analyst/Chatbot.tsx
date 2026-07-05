@@ -112,14 +112,22 @@ const SUGGESTIONS = [
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function AnalystChatbot() {
-  const [messages, setMessages] = useState<ChatMessage[]>([
+function getInitialMessages(): ChatMessage[] {
+  return [
     {
       role: 'bot',
       content: '👋 Hello! I\'m LoanBot in analyst mode.\n\nEnter an applicant ID above, then ask me anything about their credit report, score, eligibility, or fraud flags. I\'ll give you a detailed, data-driven answer.',
       ts: Date.now(),
     },
-  ]);
+  ];
+}
+
+function createChatMessage(role: 'user' | 'bot', content: string): ChatMessage {
+  return { role, content, ts: Date.now() };
+}
+
+export default function AnalystChatbot() {
+  const [messages, setMessages] = useState<ChatMessage[]>(getInitialMessages);
   const [applicantId, setApplicantId] = useState('');
   const [question, setQuestion]       = useState('');
   const [loading, setLoading]         = useState(false);
@@ -140,21 +148,17 @@ export default function AnalystChatbot() {
     }
 
     setError(null);
-    const userMsg: ChatMessage = { role: 'user', content: text, ts: Date.now() };
+    const userMsg = createChatMessage('user', text);
     setMessages(prev => [...prev, userMsg]);
     setQuestion('');
     setLoading(true);
 
     try {
       const res = await chatbotService.send(text, applicantId.trim());
-      const botMsg: ChatMessage = { role: 'bot', content: res.answer, ts: Date.now() };
+      const botMsg = createChatMessage('bot', res.answer);
       setMessages(prev => [...prev, botMsg]);
     } catch {
-      const errMsg: ChatMessage = {
-        role: 'bot',
-        content: '⚠️ LoanBot is temporarily unavailable. Please try again shortly.',
-        ts: Date.now(),
-      };
+      const errMsg = createChatMessage('bot', '⚠️ LoanBot is temporarily unavailable. Please try again shortly.');
       setMessages(prev => [...prev, errMsg]);
     } finally {
       setLoading(false);
@@ -197,11 +201,7 @@ export default function AnalystChatbot() {
               style={{ marginTop: 20, flexShrink: 0 }}
               onClick={() => {
                 setApplicantId('');
-                setMessages(prev => [...prev, {
-                  role: 'bot',
-                  content: 'Applicant ID cleared. Enter a new ID to start a fresh query.',
-                  ts: Date.now(),
-                }]);
+                setMessages(prev => [...prev, createChatMessage('bot', 'Applicant ID cleared. Enter a new ID to start a fresh query.')]);
               }}
             >
               Clear ID
@@ -269,11 +269,7 @@ export default function AnalystChatbot() {
               <button
                 className="btn btn-ghost btn-sm"
                 onClick={() => {
-                  setMessages([{
-                    role: 'bot',
-                    content: 'Chat cleared. Ready for a new conversation.',
-                    ts: Date.now(),
-                  }]);
+                  setMessages([createChatMessage('bot', 'Chat cleared. Ready for a new conversation.')]);
                 }}
               >
                 Clear

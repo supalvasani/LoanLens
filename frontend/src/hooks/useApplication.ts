@@ -22,17 +22,33 @@ export function useApplication(
   mode: 'analyst' | 'standard' = 'standard',
 ): UseApplicationReturn {
   const [data, setData]       = useState<ApplicationFull | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(!!id);
   const [error, setError]     = useState<string | null>(null);
   const [tick, setTick]       = useState(0);
 
+  // Track dependencies to trigger loading state during render
+  const [prevId, setPrevId] = useState(id);
+  const [prevMode, setPrevMode] = useState(mode);
+  const [prevTick, setPrevTick] = useState(0);
+
+  if (id !== prevId || mode !== prevMode || tick !== prevTick) {
+    setPrevId(id);
+    setPrevMode(mode);
+    setPrevTick(tick);
+    if (id) {
+      setLoading(true);
+      setError(null);
+    } else {
+      setLoading(false);
+    }
+  }
+
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
-    setError(null);
     const fetch = mode === 'analyst'
       ? loanService.getAnalystApplication(id)
       : loanService.getApplication(id);
+
 
     fetch
       .then(setData)
