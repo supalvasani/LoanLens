@@ -3,8 +3,6 @@
 Dispatches to self-mode (applicant) or analyst-mode (staff) based on JWT role.
 Rate limited to 10/minute per spec.
 """
-from __future__ import annotations
-
 from fastapi import APIRouter, Depends, Request, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field

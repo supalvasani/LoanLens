@@ -1,7 +1,7 @@
 """Pydantic v2 DTOs for loan applications, decisions, and loan-type config."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 from uuid import UUID
@@ -79,7 +79,7 @@ class UnderwriterReportData(BaseModel):
 
 
 class MonthlyTrendPoint(BaseModel):
-    month: str | None = None
+    month: date | str | None = None
     score: float | None = None
     trend_direction: str | None = None
 

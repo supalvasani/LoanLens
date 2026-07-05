@@ -4,8 +4,6 @@ All business logic lives in ApplicationService — routes are HTTP-only.
 Every route is protected by @require_role(RoleEnum.analyst).
 Request latency is logged by the global middleware in main.py.
 """
-from __future__ import annotations
-
 from typing import Literal, Optional
 from uuid import UUID
 

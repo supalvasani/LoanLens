@@ -40,7 +40,7 @@ services:
       DBT_USER: postgres
       DBT_PASSWORD: admin
       DBT_DBNAME: loanlens_db
-      _PIP_ADDITIONAL_REQUIREMENTS: dbt-core dbt-postgres dbt-bigquery psycopg2-binary faker
+      _PIP_ADDITIONAL_REQUIREMENTS: 'dbt-core>=1.8.0,<2.0.0 dbt-postgres>=1.8.0,<2.0.0 dbt-bigquery>=1.8.0,<2.0.0 psycopg2-binary faker'
     ports:
       - "8080:8080"
     volumes:

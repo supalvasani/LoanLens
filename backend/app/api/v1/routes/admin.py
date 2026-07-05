@@ -3,8 +3,6 @@
 Admin-only. All routes require role=admin in JWT.
 Every write logs old + new values to audit_log.
 """
-from __future__ import annotations
-
 from typing import Optional
 from uuid import UUID
 
