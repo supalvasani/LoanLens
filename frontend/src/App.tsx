@@ -25,6 +25,8 @@ import AdminAuditLog    from './pages/admin/AuditLog';
 import ManagerDashboard from './pages/manager/Dashboard';
 import ManagerPortfolio from './pages/manager/Portfolio';
 import ManagerQueue     from './pages/manager/Queue';
+import ManagerApplicationDetail from './pages/manager/ApplicationDetail';
+import ManagerConfig     from './pages/manager/Config';
 
 // ── Analyst ──────────────────────────────────────────────────────────────────
 import AnalystDashboard       from './pages/analyst/Dashboard';
@@ -81,6 +83,8 @@ export default function App() {
           <Route path="/manager/dashboard" element={<R roles={['manager']}><ManagerDashboard /></R>} />
           <Route path="/manager/portfolio" element={<R roles={['manager']}><ManagerPortfolio /></R>} />
           <Route path="/manager/queue"     element={<R roles={['manager']}><ManagerQueue /></R>} />
+          <Route path="/manager/applications/:id" element={<R roles={['manager']}><ManagerApplicationDetail /></R>} />
+          <Route path="/manager/config"    element={<R roles={['manager']}><ManagerConfig /></R>} />
           <Route path="/manager/*"         element={<R roles={['manager']}><ManagerDashboard /></R>} />
 
           {/* ── Analyst ── */}

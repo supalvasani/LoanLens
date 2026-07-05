@@ -249,3 +249,66 @@ class MartRepository:
         except ProgrammingError:
             await self.session.rollback()
             return None
+
+    # ── Portfolio Analytics ───────────────────────────────────────────────────
+
+    async def get_portfolio_score_distribution(self) -> list[dict[str, Any]]:
+        try:
+            result = await self.session.execute(
+                text(
+                    """
+                    SELECT
+                        CASE
+                            WHEN score >= 0 AND score <= 20 THEN '0-20'
+                            WHEN score > 20 AND score <= 40 THEN '21-40'
+                            WHEN score > 40 AND score <= 60 THEN '41-60'
+                            WHEN score > 60 AND score <= 80 THEN '61-80'
+                            WHEN score > 80 AND score <= 100 THEN '81-100'
+                        END as score_bucket,
+                        COUNT(*) as count
+                    FROM mart_credit_score
+                    WHERE score IS NOT NULL
+                    GROUP BY 1
+                    ORDER BY score_bucket
+                    """
+                )
+            )
+            return [dict(r) for r in result.mappings().all()]
+        except ProgrammingError:
+            await self.session.rollback()
+            return []
+
+    async def get_portfolio_risk_breakdown(self) -> list[dict[str, Any]]:
+        try:
+            result = await self.session.execute(
+                text(
+                    """
+                    SELECT
+                        risk_tier,
+                        COUNT(*) as count
+                    FROM mart_risk_segmentation
+                    GROUP BY 1
+                    """
+                )
+            )
+            return [dict(r) for r in result.mappings().all()]
+        except ProgrammingError:
+            await self.session.rollback()
+            return []
+
+    async def get_portfolio_avg_emi_to_income_ratio(self) -> float:
+        try:
+            result = await self.session.execute(
+                text(
+                    """
+                    SELECT AVG(emi_burden_ratio) as avg_ratio
+                    FROM mart_underwriter_report
+                    """
+                )
+            )
+            val = result.scalar()
+            return float(val) if val is not None else 0.0
+        except ProgrammingError:
+            await self.session.rollback()
+            return 0.0
+

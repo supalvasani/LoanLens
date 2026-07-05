@@ -185,3 +185,67 @@ class LoanTypeConfigUpdateRequest(BaseModel):
     approve_threshold: int | None = Field(default=None, ge=0, le=100)
     review_lower: int | None = Field(default=None, ge=0, le=100)
     review_upper: int | None = Field(default=None, ge=0, le=100)
+
+
+# ── Manager DTOs ─────────────────────────────────────────────────────────────
+
+class ManagerDecisionDTO(BaseModel):
+    """Manager approve or reject — notes always required."""
+    decision: DecisionEnum = Field(..., description="approved or rejected only")
+    notes: str = Field(min_length=1, max_length=2000)
+
+    @field_validator("decision")
+    @classmethod
+    def must_be_approve_or_reject(cls, v: DecisionEnum) -> DecisionEnum:
+        if v not in (DecisionEnum.approved, DecisionEnum.rejected):
+            raise ValueError("Decision must be approved or rejected")
+        return v
+
+
+class ConfigUpdateDTO(BaseModel):
+    """Manager can edit per loan type: manager_threshold_amount, approve_threshold, review_lower, review_upper."""
+    manager_threshold_amount: Decimal | None = Field(default=None, gt=0)
+    approve_threshold: int | None = Field(default=None, ge=0, le=100)
+    review_lower: int | None = Field(default=None, ge=0, le=100)
+    review_upper: int | None = Field(default=None, ge=0, le=100)
+
+
+class ScoreBucketCount(BaseModel):
+    score_bucket: str
+    count: int
+
+
+class RiskBreakdown(BaseModel):
+    low_count: int
+    medium_count: int
+    high_count: int
+
+
+class PortfolioDTO(BaseModel):
+    score_distribution: list[ScoreBucketCount]
+    approval_rate: float
+    risk_breakdown: RiskBreakdown
+    avg_emi_to_income_ratio: float
+    total_applications: int
+    escalated_count: int
+
+
+class ManagerQueueItem(BaseModel):
+    """Enriched escalated application row for manager dashboard queue."""
+    application_id: UUID
+    applicant_name: str | None = None
+    loan_type: LoanTypeEnum
+    amount_requested: Decimal
+    score: float | None = None
+    fraud_flags: list[FraudFlagData] = Field(default_factory=list)
+    escalation_reason: str | None = None
+    escalated_at: datetime | None = None
+    escalated_by_name: str | None = None
+
+
+class ManagerApplicationResponse(ApplicationWithMartDataResponse):
+    """Manager detailed view extending credit report with escalation context."""
+    escalation_reason: str | None = None
+    escalated_by_name: str | None = None
+    escalated_at: datetime | None = None
+

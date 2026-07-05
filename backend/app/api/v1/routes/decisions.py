@@ -20,6 +20,7 @@ from app.schemas.loan import (
     AnalystDecisionRequest,
     DecisionResponse,
     ManagerDecisionRequest,
+    ManagerDecisionDTO,
 )
 from app.services.decision_service import DecisionService
 
@@ -31,6 +32,33 @@ _DECISION_LIMIT = "20/minute"
 def _raise_domain(exc: DomainException) -> None:
     from fastapi import HTTPException
     raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
+
+
+# ── POST /decisions/{id} ──────────────────────────────────────────────────────
+
+@router.post(
+    "/decisions/{application_id}",
+    response_model=DecisionResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Manager: approve or reject escalated application (final authority)",
+)
+@limiter.limit(_DECISION_LIMIT)
+async def manager_decide_short(
+    request: Request,
+    application_id: UUID,
+    payload: ManagerDecisionDTO,
+    manager: User = Depends(require_role(RoleEnum.manager, RoleEnum.admin)),
+    db: AsyncSession = Depends(get_db),
+) -> DecisionResponse:
+    """
+    Manager/Admin final decision on an escalated application.
+    Notes are mandatory. Action updates application status and appends to decisions + audit_log.
+    """
+    try:
+        # Map ManagerDecisionDTO fields to manager_decide
+        return await DecisionService(db).manager_decide(application_id, manager, payload)
+    except DomainException as exc:
+        _raise_domain(exc)
 
 
 # ── POST /decisions/{id}/analyst ─────────────────────────────────────────────
@@ -94,7 +122,7 @@ async def analyst_escalate(
     "/decisions/{application_id}/manager",
     response_model=DecisionResponse,
     status_code=status.HTTP_200_OK,
-    summary="Manager: final approve or reject on escalated application",
+    summary="Manager: final approve or reject on escalated application (legacy endpoint)",
 )
 @limiter.limit(_DECISION_LIMIT)
 async def manager_decide(

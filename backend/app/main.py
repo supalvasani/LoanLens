@@ -78,6 +78,7 @@ from app.api.v1.routes.upload        import router as upload_router         # no
 from app.api.v1.routes.credit_scores import router as credit_scores_router  # noqa: E402
 from app.api.v1.routes.eligibility   import router as eligibility_router    # noqa: E402
 from app.api.v1.routes.analyst       import router as analyst_router        # noqa: E402
+from app.api.v1.routes.manager       import router as manager_router        # noqa: E402
 
 app.include_router(auth_router,          prefix="/api/v1")
 app.include_router(users_router,         prefix="/api/v1")
@@ -89,3 +90,4 @@ app.include_router(upload_router,        prefix="/api/v1")
 app.include_router(credit_scores_router, prefix="/api/v1")
 app.include_router(eligibility_router,   prefix="/api/v1")
 app.include_router(analyst_router,       prefix="/api/v1")
+app.include_router(manager_router,       prefix="/api/v1")
