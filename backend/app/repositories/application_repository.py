@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import and_, select, update
+from sqlalchemy import and_, select, update, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enums import ApplicationStatusEnum, LoanTypeEnum, RoleEnum
@@ -103,3 +103,15 @@ class ApplicationRepository:
         )
         result = await self.session.execute(stmt)
         return list(result.scalars().all())
+
+    async def get_status_counts(self) -> dict[str, int]:
+        """Return counts of applications grouped by status."""
+        result = await self.session.execute(
+            select(
+                RawLoanApplication.status,
+                func.count(RawLoanApplication.application_id)
+            )
+            .group_by(RawLoanApplication.status)
+        )
+        return {status.value: count for status, count in result.all()}
+

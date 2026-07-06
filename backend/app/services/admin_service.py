@@ -1,8 +1,3 @@
-"""Admin service — user management, config editing, audit log retrieval.
-
-All business logic lives here; routes are HTTP-only.
-Every write is logged in audit_log with old and new values.
-"""
 from __future__ import annotations
 
 from uuid import UUID

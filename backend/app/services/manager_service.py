@@ -298,18 +298,7 @@ class ManagerService:
         avg_emi = await self.mart_repo.get_portfolio_avg_emi_to_income_ratio()
 
         # Counts from raw_loan_applications
-        app_counts = await self.session.execute(
-            text(
-                """
-                SELECT
-                    status,
-                    COUNT(*) as count
-                FROM raw_loan_applications
-                GROUP BY 1
-                """
-            )
-        )
-        counts = {r["status"]: r["count"] for r in app_counts.mappings().all()}
+        counts = await self.app_repo.get_status_counts()
 
         total_applications = sum(counts.values())
         escalated_count = counts.get(ApplicationStatusEnum.escalated.value, 0)
