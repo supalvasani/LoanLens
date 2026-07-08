@@ -1,6 +1,6 @@
 with avg_credits as (
     select
-        applicant_id,
+        raw_applicant_id as applicant_id,
         avg(amount) as avg_credit
     from {{ ref('stg_transactions') }}
     where txn_type = 'credit'
@@ -20,7 +20,7 @@ avg_cash as (
 flags as (
     -- sudden large deposits (3x average credit)
     select
-        t.applicant_id,
+        t.raw_applicant_id as applicant_id,
         'sudden_large_deposit' as flag_type,
         'Credit of ' || t.amount || ' exceeds 3x average credit of ' || round(ac.avg_credit, 2) as flag_detail,
         case
@@ -30,7 +30,7 @@ flags as (
         end as severity,
         t.txn_date as detected_at
     from {{ ref('stg_transactions') }} t
-    join avg_credits ac on t.applicant_id = ac.applicant_id
+    join avg_credits ac on t.raw_applicant_id = ac.applicant_id
     where t.txn_type = 'credit'
       and ac.avg_credit > 0
       and t.amount > ac.avg_credit * 3
@@ -55,7 +55,7 @@ flags as (
 
     -- high frequency small debits
     select
-        applicant_id,
+        raw_applicant_id as applicant_id,
         'high_frequency_small_txns' as flag_type,
         'More than 50 small debits under INR 500 detected' as flag_detail,
         'med' as severity,
@@ -63,14 +63,14 @@ flags as (
     from {{ ref('stg_transactions') }}
     where txn_type = 'debit'
       and amount < 500
-    group by applicant_id
+    group by raw_applicant_id
     having count(*) > 50
 
     union all
 
     -- circular transfers: matching credit/debit pairs within 3 days
     select
-        c.applicant_id,
+        c.raw_applicant_id as applicant_id,
         'circular_transfer' as flag_type,
         'Matching credit/debit of ' || c.amount || ' within 3 days' as flag_detail,
         case
@@ -81,7 +81,7 @@ flags as (
         c.txn_date as detected_at
     from {{ ref('stg_transactions') }} c
     join {{ ref('stg_transactions') }} d
-        on c.applicant_id = d.applicant_id
+        on c.raw_applicant_id = d.raw_applicant_id
        and c.txn_type = 'credit'
        and d.txn_type = 'debit'
        and c.amount = d.amount

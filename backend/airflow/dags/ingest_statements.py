@@ -1,10 +1,17 @@
-"""Hourly ingest from CSV landing zone into raw layer tables."""
+"""Hourly ingest from CSV landing zone into raw layer tables.
+
+Bank statement CSVs are processed through the universal ingestion pipeline
+(column_classifier → reconcile → dedup). Any other CSV type (applicants)
+is still inserted directly via the existing SQL.
+"""
 
 from __future__ import annotations
 
-import csv
+import json
+import sys
 import uuid
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 import psycopg2
@@ -12,7 +19,18 @@ from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
 
-from loanlens_common import db_dsn, write_pipeline_audit
+# Make the app package importable from within Airflow workers
+_BACKEND_ROOT = Path(__file__).resolve().parents[2]
+if str(_BACKEND_ROOT) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_ROOT))
+
+from loanlens_common import db_dsn, write_pipeline_audit  # noqa: E402
+from app.ingestion.pipeline import (  # noqa: E402
+    ingest_statement,
+    STATUS_OK,
+    STATUS_RECONCILIATION_WARN,
+)
+from app.ingestion.dedup import file_hash as compute_file_hash  # noqa: E402
 
 LANDING_ROOT = Path("/opt/airflow/data/landing")
 APPLICANTS_DIR = LANDING_ROOT / "applicants"
@@ -24,6 +42,25 @@ def _already_ingested(cur, source_file: str) -> bool:
     return cur.fetchone() is not None
 
 
+def _file_hash_already_seen(cur, applicant_id: str, fhash: str) -> bool:
+    """Check statement_uploads for exact-file dedup."""
+    cur.execute(
+        "SELECT 1 FROM statement_uploads WHERE applicant_id = %s AND file_hash = %s LIMIT 1",
+        (applicant_id, fhash),
+    )
+    return cur.fetchone() is not None
+
+
+def _registry_lookup_sync(cur, header_key: frozenset) -> dict | None:
+    """Fetch a matching format_registry entry (fast path)."""
+    cur.execute("SELECT match_headers, column_map, amount_pattern FROM format_registry")
+    for entry in cur.fetchall():
+        match_headers, column_map, amount_pattern = entry
+        if frozenset(h.strip().lower() for h in match_headers) == header_key:
+            return {"column_map": column_map, "amount_pattern": amount_pattern}
+    return None
+
+
 def ingest_landing_files() -> None:
     started_at = datetime.now(timezone.utc)
     rows_processed = 0
@@ -33,40 +70,27 @@ def ingest_landing_files() -> None:
     try:
         with psycopg2.connect(db_dsn()) as conn:
             with conn.cursor() as cur:
-                for directory, record_type, insert_sql in (
-                    (
-                        APPLICANTS_DIR,
-                        "applicants",
-                        """
+
+                # ── Applicants (unchanged format) ─────────────────────────────
+                if APPLICANTS_DIR.exists():
+                    insert_sql = """
                         INSERT INTO raw_applicants
                         (raw_applicant_id, applicant_ref, name, pan_number, phone, city,
                          monthly_income_declared, ingested_at)
-                        VALUES (%(raw_applicant_id)s::uuid, %(applicant_ref)s, %(name)s, %(pan_number)s,
-                                %(phone)s, %(city)s, %(monthly_income_declared)s, NOW())
+                        VALUES (%(raw_applicant_id)s::uuid, %(applicant_ref)s, %(name)s,
+                                %(pan_number)s, %(phone)s, %(city)s,
+                                %(monthly_income_declared)s, NOW())
                         ON CONFLICT (applicant_ref) DO NOTHING
-                        """,
-                    ),
-                    (
-                        TRANSACTIONS_DIR,
-                        "transactions",
-                        """
-                        INSERT INTO raw_transactions
-                        (raw_id, applicant_id, txn_date, amount, txn_type, description, balance_after, ingested_at)
-                        VALUES (%(raw_id)s::uuid, %(applicant_id)s::uuid, %(txn_date)s, %(amount)s,
-                                %(txn_type)s, %(description)s, %(balance_after)s, NOW())
-                        ON CONFLICT (raw_id) DO NOTHING
-                        """,
-                    ),
-                ):
-                    if not directory.exists():
-                        continue
-                    for csv_path in sorted(directory.glob("*.csv")):
+                    """
+                    import csv as _csv
+                    import io as _io
+                    for csv_path in sorted(APPLICANTS_DIR.glob("*.csv")):
                         source_file = str(csv_path)
                         if _already_ingested(cur, source_file):
                             continue
                         file_rows = 0
                         with csv_path.open(newline="", encoding="utf-8") as handle:
-                            reader = csv.DictReader(handle)
+                            reader = _csv.DictReader(handle)
                             for row in reader:
                                 try:
                                     cur.execute(insert_sql, row)
@@ -79,9 +103,130 @@ def ingest_landing_files() -> None:
                             VALUES (%s, %s, %s, %s)
                             ON CONFLICT (source_file) DO NOTHING
                             """,
-                            (str(uuid.uuid4()), source_file, record_type, file_rows),
+                            (str(uuid.uuid4()), source_file, "applicants", file_rows),
                         )
                         rows_processed += file_rows
+
+                # ── Transactions (universal ingestion pipeline) ────────────────
+                if TRANSACTIONS_DIR.exists():
+                    for csv_path in sorted(TRANSACTIONS_DIR.glob("*.csv")):
+                        source_file = str(csv_path)
+                        if _already_ingested(cur, source_file):
+                            continue
+
+                        raw_bytes = csv_path.read_bytes()
+                        fhash = compute_file_hash(raw_bytes)
+
+                        # Resolve applicant_id from filename convention:
+                        # "<applicant_id>_<anything>.csv"  OR fall back to sentinel
+                        stem = csv_path.stem
+                        applicant_id = stem.split("_")[0] if "_" in stem else stem
+
+                        if _file_hash_already_seen(cur, applicant_id, fhash):
+                            cur.execute(
+                                """
+                                INSERT INTO landing_ingest_log (log_id, source_file, record_type, rows_loaded)
+                                VALUES (%s, %s, %s, %s)
+                                ON CONFLICT (source_file) DO NOTHING
+                                """,
+                                (str(uuid.uuid4()), source_file, "transactions_duplicate", 0),
+                            )
+                            continue
+
+                        def _registry_lookup(header_key):
+                            return _registry_lookup_sync(cur, header_key)
+
+                        ingest_result = ingest_statement(
+                            raw_bytes=raw_bytes,
+                            applicant_id=applicant_id,
+                            file_name=csv_path.name,
+                            file_hash_lookup=lambda aid, h: False,   # checked above
+                            registry_lookup=_registry_lookup,
+                        )
+
+                        file_rows = 0
+
+                        if ingest_result.status in (STATUS_OK, STATUS_RECONCILIATION_WARN):
+                            insert_sql = """
+                                INSERT INTO raw_transactions
+                                    (raw_id, raw_applicant_id, txn_date, amount, txn_type,
+                                     description, balance_after, source_format,
+                                     source_file_hash, ingested_at)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                                ON CONFLICT (raw_id) DO NOTHING
+                            """
+                            for row in (ingest_result.rows or []):
+                                try:
+                                    cur.execute(
+                                        insert_sql,
+                                        (
+                                            str(row["raw_id"]),
+                                            applicant_id,
+                                            row["txn_date"],
+                                            float(row["amount"]),
+                                            row["txn_type"],
+                                            row.get("description", "—"),
+                                            float(row["balance_after"]) if row.get("balance_after") is not None else None,
+                                            row.get("source_format", "unknown"),
+                                            row.get("source_file_hash", fhash),
+                                        ),
+                                    )
+                                    file_rows += 1
+                                except Exception:
+                                    failures += 1
+
+                            # Record in statement_uploads
+                            rows_list = ingest_result.rows or []
+                            dates = [r["txn_date"] for r in rows_list if r.get("txn_date")]
+                            cur.execute(
+                                """
+                                INSERT INTO statement_uploads
+                                    (upload_id, applicant_id, file_hash, file_name, source_format,
+                                     row_count, reconciliation_verdict, reconciliation_match_rate,
+                                     date_range_start, date_range_end, uploaded_at)
+                                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+                                ON CONFLICT (applicant_id, file_hash) DO NOTHING
+                                """,
+                                (
+                                    str(uuid.uuid4()),
+                                    applicant_id,
+                                    fhash,
+                                    csv_path.name,
+                                    ingest_result.source_format,
+                                    file_rows,
+                                    ingest_result.verdict,
+                                    ingest_result.match_rate,
+                                    min(dates) if dates else None,
+                                    max(dates) if dates else None,
+                                ),
+                            )
+
+                            if ingest_result.status == STATUS_RECONCILIATION_WARN:
+                                _insert_review_queue(
+                                    cur, ingest_result, csv_path.name, "reconciliation_warn"
+                                )
+
+                        else:
+                            # Rejected — log to review queue so humans can resolve
+                            reason_map = {
+                                "low_confidence": "low_confidence",
+                                "reconciliation_failed": "reconciliation_fail",
+                                "not_a_bank_statement": "low_confidence",
+                            }
+                            reason = reason_map.get(ingest_result.status, "low_confidence")
+                            _insert_review_queue(cur, ingest_result, csv_path.name, reason)
+                            failures += 1
+
+                        cur.execute(
+                            """
+                            INSERT INTO landing_ingest_log (log_id, source_file, record_type, rows_loaded)
+                            VALUES (%s, %s, %s, %s)
+                            ON CONFLICT (source_file) DO NOTHING
+                            """,
+                            (str(uuid.uuid4()), source_file, "transactions", file_rows),
+                        )
+                        rows_processed += file_rows
+
             conn.commit()
     except Exception:
         status = "failed"
@@ -96,9 +241,30 @@ def ingest_landing_files() -> None:
         )
 
 
+def _insert_review_queue(cur, ingest_result, file_name: str, reason: str) -> None:
+    sample = [
+        {k: (str(v) if isinstance(v, Decimal) else v) for k, v in row.items()}
+        for row in ingest_result.sample_rows
+    ]
+    cur.execute(
+        """
+        INSERT INTO format_review_queue
+            (review_id, file_name, detected_headers, sample_rows, reason, created_at)
+        VALUES (%s, %s, %s, %s, %s, NOW())
+        """,
+        (
+            str(uuid.uuid4()),
+            file_name,
+            ingest_result.detected_headers,
+            json.dumps(sample),
+            reason,
+        ),
+    )
+
+
 with DAG(
     dag_id="ingest_statements",
-    description="Load new CSV rows from landing zone into raw layer",
+    description="Load new CSV rows from landing zone into raw layer (universal pipeline)",
     schedule="@hourly",
     start_date=datetime(2026, 1, 1),
     catchup=False,

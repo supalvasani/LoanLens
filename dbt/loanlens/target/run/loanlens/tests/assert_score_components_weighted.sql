@@ -1,0 +1,24 @@
+
+    
+    select
+      count(*) as failures,
+      count(*) != 0 as should_warn,
+      count(*) != 0 as should_error
+    from (
+      
+    
+  select applicant_id, score
+from "loanlens_db"."public_marts"."mart_credit_score"
+where abs(
+    score - round(
+        (score_breakdown_json->'income_stability'->>'score')::numeric * 0.30
+        + (score_breakdown_json->'emi_burden'->>'score')::numeric * 0.25
+        + (score_breakdown_json->'bounce_history'->>'score')::numeric * 0.25
+        + (score_breakdown_json->'balance_maintenance'->>'score')::numeric * 0.20,
+        2
+    )
+) > 0.01
+  
+  
+      
+    ) dbt_internal_test

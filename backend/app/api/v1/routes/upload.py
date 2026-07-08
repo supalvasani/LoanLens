@@ -1,19 +1,23 @@
 """Bank Statement Upload — POST /upload/bank-statement
 
-Accepts a CSV file with columns:
-  txn_date, amount, txn_type (credit|debit), description, balance_after
+Accepts any bank statement CSV (any layout) and runs it through the
+universal ingestion pipeline. The pipeline handles:
+  - Duplicate detection (SHA-256 file hash, checked before parsing)
+  - Header-row detection (handles preamble rows, e.g. Axis Bank)
+  - format_registry fast path (exact header-set match → skip classifier)
+  - Generic column classifier (heuristic path for unknown banks)
+  - Balance reconciliation gate
+  - Deterministic row-level dedup (UUID5 raw_id)
 
 The applicant must already have a raw_applicants record linked to their user_id.
-Each row is inserted into raw_transactions (ON CONFLICT DO NOTHING by raw_id).
-Returns a summary: rows_inserted, rows_skipped, errors.
+Canonical rows are bulk-inserted into raw_transactions with ON CONFLICT DO NOTHING.
 """
 
-
-import csv
-import io
+import json
 import uuid
-from datetime import date, datetime, timezone
-from decimal import Decimal, InvalidOperation
+from datetime import datetime, timezone
+from decimal import Decimal
+from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel
@@ -26,11 +30,20 @@ from app.core.rate_limit import limiter
 from app.core.logger import logger
 from app.enums import RoleEnum
 from app.models.user import User
+from app.ingestion.pipeline import (
+    ingest_statement,
+    STATUS_OK,
+    STATUS_DUPLICATE_FILE,
+    STATUS_TOO_FEW_ROWS,
+    STATUS_NOT_A_BANK_STATEMENT,
+    STATUS_LOW_CONFIDENCE,
+    STATUS_RECONCILIATION_FAILED,
+    STATUS_RECONCILIATION_WARN,
+)
+from app.ingestion.dedup import file_hash as compute_file_hash
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
-REQUIRED_COLS = {"txn_date", "amount", "txn_type", "description", "balance_after"}
-VALID_TXN_TYPES = {"credit", "debit"}
 MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
@@ -38,9 +51,169 @@ class StatementUploadResult(BaseModel):
     rows_inserted: int
     rows_skipped: int
     errors: list[str]
-    applicant_id: str | None
+    applicant_id: Optional[str]
+    reconciliation_verdict: Optional[str] = None
+    source_format: Optional[str] = None
+    confidence: Optional[float] = None
 
 
+# ── Registry lookup (injected into pipeline, async DB wrapper) ────────────────
+
+async def _build_registry_lookup(db: AsyncSession):
+    """Fetch format_registry into memory for this request and return a lookup fn."""
+    result = await db.execute(
+        text("SELECT match_headers, column_map, amount_pattern FROM format_registry")
+    )
+    entries = result.mappings().all()
+
+    def _lookup(header_key: frozenset) -> Optional[dict]:
+        for entry in entries:
+            registry_key = frozenset(h.strip().lower() for h in entry["match_headers"])
+            if registry_key == header_key:
+                return {
+                    "column_map": entry["column_map"],
+                    "amount_pattern": entry["amount_pattern"],
+                }
+        return None
+
+    return _lookup
+
+
+async def _file_hash_lookup(db: AsyncSession, applicant_id: str, fhash: str) -> bool:
+    """Return True if this (applicant_id, file_hash) pair already exists."""
+    result = await db.execute(
+        text(
+            "SELECT 1 FROM statement_uploads "
+            "WHERE applicant_id = :aid AND file_hash = :fh LIMIT 1"
+        ),
+        {"aid": applicant_id, "fh": fhash},
+    )
+    return result.fetchone() is not None
+
+
+# ── Bulk insert helpers ───────────────────────────────────────────────────────
+
+_INSERT_TXN_SQL = text("""
+    INSERT INTO raw_transactions
+        (raw_id, raw_applicant_id, txn_date, amount, txn_type, description,
+         balance_after, source_format, source_file_hash, ingested_at)
+    VALUES
+        (:raw_id, :raw_applicant_id, :txn_date, :amount, :txn_type, :description,
+         :balance_after, :source_format, :source_file_hash, :ingested_at)
+    ON CONFLICT (raw_id) DO NOTHING
+""")
+
+_INSERT_UPLOAD_SQL = text("""
+    INSERT INTO statement_uploads
+        (upload_id, applicant_id, file_hash, file_name, source_format,
+         row_count, reconciliation_verdict, reconciliation_match_rate,
+         date_range_start, date_range_end, uploaded_at)
+    VALUES
+        (:upload_id, :applicant_id, :file_hash, :file_name, :source_format,
+         :row_count, :reconciliation_verdict, :reconciliation_match_rate,
+         :date_range_start, :date_range_end, :uploaded_at)
+    ON CONFLICT (applicant_id, file_hash) DO NOTHING
+""")
+
+_INSERT_REVIEW_SQL = text("""
+    INSERT INTO format_review_queue
+        (review_id, file_name, detected_headers, sample_rows, reason, created_at)
+    VALUES
+        (:review_id, :file_name, :detected_headers, :sample_rows, :reason, :created_at)
+""")
+
+
+async def _bulk_insert_rows(
+    db: AsyncSession,
+    rows: list[dict],
+    applicant_id: str,
+) -> tuple[int, int]:
+    """Insert canonical rows, return (inserted, skipped)."""
+    inserted = 0
+    skipped = 0
+    now = datetime.now(timezone.utc)
+
+    for row in rows:
+        result = await db.execute(
+            _INSERT_TXN_SQL,
+            {
+                "raw_id": str(row["raw_id"]),
+                "raw_applicant_id": applicant_id,
+                "txn_date": row["txn_date"],
+                "amount": row["amount"],
+                "txn_type": row["txn_type"],
+                "description": row.get("description", "—"),
+                "balance_after": row.get("balance_after"),
+                "source_format": row.get("source_format", "unknown"),
+                "source_file_hash": row.get("source_file_hash", ""),
+                "ingested_at": now,
+            },
+        )
+        if result.rowcount and result.rowcount > 0:
+            inserted += 1
+        else:
+            skipped += 1
+
+    return inserted, skipped
+
+
+async def _insert_upload_record(
+    db: AsyncSession,
+    applicant_id: str,
+    result,
+    file_name: str,
+    rows: list[dict],
+) -> None:
+    dates = [r["txn_date"] for r in rows if r.get("txn_date")]
+    date_start = min(dates) if dates else None
+    date_end = max(dates) if dates else None
+
+    await db.execute(
+        _INSERT_UPLOAD_SQL,
+        {
+            "upload_id": str(uuid.uuid4()),
+            "applicant_id": applicant_id,
+            "file_hash": result.file_hash,
+            "file_name": file_name,
+            "source_format": result.source_format,
+            "row_count": len(rows),
+            "reconciliation_verdict": result.verdict,
+            "reconciliation_match_rate": result.match_rate,
+            "date_range_start": date_start,
+            "date_range_end": date_end,
+            "uploaded_at": datetime.now(timezone.utc),
+        },
+    )
+
+
+async def _insert_review_queue(
+    db: AsyncSession,
+    result,
+    file_name: str,
+    reason: str,
+) -> None:
+    await db.execute(
+        _INSERT_REVIEW_SQL,
+        {
+            "review_id": str(uuid.uuid4()),
+            "file_name": file_name,
+            "detected_headers": result.detected_headers,
+            "sample_rows": json.dumps(
+                [
+                    {
+                        k: (str(v) if isinstance(v, Decimal) else v)
+                        for k, v in row.items()
+                    }
+                    for row in result.sample_rows
+                ]
+            ),
+            "reason": reason,
+            "created_at": datetime.now(timezone.utc),
+        },
+    )
+
+
+# ── Route ─────────────────────────────────────────────────────────────────────
 
 @router.post(
     "/bank-statement",
@@ -51,11 +224,11 @@ class StatementUploadResult(BaseModel):
 @limiter.limit("10/minute")
 async def upload_bank_statement(
     request: Request,
-    file: UploadFile = File(..., description="CSV with columns: txn_date, amount, txn_type, description, balance_after"),
+    file: UploadFile = File(..., description="Bank statement CSV — any format"),
     current_user: User = Depends(require_role(RoleEnum.applicant)),
     db: AsyncSession = Depends(get_db),
 ) -> StatementUploadResult:
-    # ── 1. Validate file type ────────────────────────────────────────────────
+    # ── 1. Basic file validation ──────────────────────────────────────────────
     if not file.filename or not file.filename.lower().endswith(".csv"):
         logger.warning("bank_statement_upload_invalid_type", extra={"filename": file.filename})
         raise HTTPException(status_code=400, detail="Only CSV files are accepted.")
@@ -65,174 +238,173 @@ async def upload_bank_statement(
         logger.warning("bank_statement_upload_too_large", extra={"size": len(raw_bytes)})
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 5 MB.")
 
-    # ── 2. Resolve applicant_id from raw_applicants ──────────────────────────
+    # ── 2. Resolve applicant_id ───────────────────────────────────────────────
     result = await db.execute(
         text("SELECT raw_applicant_id FROM raw_applicants WHERE user_id = :uid LIMIT 1"),
         {"uid": str(current_user.user_id)},
     )
     row = result.mappings().first()
     if not row:
-        logger.warning("bank_statement_upload_no_profile", extra={"user_id": str(current_user.user_id)})
+        logger.warning(
+            "bank_statement_upload_no_profile",
+            extra={"user_id": str(current_user.user_id)},
+        )
         raise HTTPException(
             status_code=422,
             detail="No applicant profile found. Please complete your profile before uploading.",
         )
     applicant_id = str(row["raw_applicant_id"])
 
-    # ── 3. Parse CSV ──────────────────────────────────────────────────────────
-    try:
-        text_content = raw_bytes.decode("utf-8-sig")  # handle BOM
-    except UnicodeDecodeError as exc:
-        logger.warning("bank_statement_upload_unicode_error", extra={"error": str(exc)})
-        raise HTTPException(status_code=400, detail="File encoding must be UTF-8.")
+    # ── 3. Build lookup callables ─────────────────────────────────────────────
+    registry_lookup = await _build_registry_lookup(db)
 
-    reader = csv.DictReader(io.StringIO(text_content))
-    if reader.fieldnames is None:
-        logger.warning("bank_statement_upload_empty_csv")
-        raise HTTPException(status_code=400, detail="Empty or unreadable CSV.")
+    async def _hash_lookup(aid: str, fhash: str) -> bool:
+        return await _file_hash_lookup(db, aid, fhash)
 
-    raw_headers = [h.strip() for h in reader.fieldnames if h]
-    headers_lower = [h.lower() for h in raw_headers]
+    # Sync wrappers for the (sync) pipeline module
+    def sync_hash_lookup(aid: str, fhash: str) -> bool:
+        import asyncio
+        # The pipeline is sync; we pre-compute the hash and check it above
+        # to avoid bridging async/sync. The pipeline receives a stub that
+        # always returns False (the actual check is done below before calling).
+        return False  # placeholder — real check done at step 4
 
-    is_standard = all(col in headers_lower for col in ["txn_date", "amount", "txn_type", "description", "balance_after"])
-    is_banking = "date" in headers_lower and "description" in headers_lower and any("debit" in h for h in headers_lower) and any("credit" in h for h in headers_lower) and any("balance" in h for h in headers_lower)
+    # ── 4. Real file-hash duplicate check (async, before pipeline call) ───────
+    fhash = compute_file_hash(raw_bytes)
+    if await _file_hash_lookup(db, applicant_id, fhash):
+        logger.info(
+            "bank_statement_duplicate_file",
+            extra={"applicant_id": applicant_id, "file_hash": fhash},
+        )
+        raise HTTPException(
+            status_code=409,
+            detail="This statement has already been uploaded.",
+        )
 
-    if not is_standard and not is_banking:
-        msg = f"Unsupported CSV headers: {', '.join(raw_headers)}. Required columns are either (txn_date, amount, txn_type, description, balance_after) or standard bank export columns (Date, Description, Debit, Credit, Balance)."
-        logger.warning("bank_statement_upload_invalid_headers", extra={"headers": raw_headers})
-        raise HTTPException(status_code=400, detail=msg)
+    # ── 5. Run pipeline (sync, no DB) ─────────────────────────────────────────
+    ingest_result = ingest_statement(
+        raw_bytes=raw_bytes,
+        applicant_id=applicant_id,
+        file_name=file.filename,
+        # File-hash dedup already handled above; pass a no-op so the pipeline
+        # doesn't re-check (avoids needing asyncio bridge inside sync code).
+        file_hash_lookup=lambda aid, h: False,
+        registry_lookup=registry_lookup,
+    )
 
-    # Helper function for flexible date parsing
-    def parse_flexible_date(date_str: str) -> date:
-        try:
-            return date.fromisoformat(date_str)
-        except ValueError:
-            pass
-        for fmt in ("%d-%b-%Y", "%d-%B-%Y", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
-            try:
-                return datetime.strptime(date_str, fmt).date()
-            except ValueError:
-                continue
-        raise ValueError(f"Invalid format")
+    file_name = file.filename
 
-    # ── 4. Insert rows ────────────────────────────────────────────────────────
-    rows_inserted = 0
-    rows_skipped = 0
-    errors: list[str] = []
+    # ── 6. Route on pipeline status ───────────────────────────────────────────
 
-    INSERT_SQL = text("""
-        INSERT INTO raw_transactions
-            (raw_id, applicant_id, txn_date, amount, txn_type, description, balance_after, ingested_at)
-        VALUES
-            (:raw_id, :applicant_id, :txn_date, :amount, :txn_type, :description, :balance_after, :ingested_at)
-        ON CONFLICT (raw_id) DO NOTHING
-    """)
+    if ingest_result.status == STATUS_TOO_FEW_ROWS:
+        logger.warning(
+            "bank_statement_too_few_rows",
+            extra={"applicant_id": applicant_id, "file": file_name},
+        )
+        raise HTTPException(
+            status_code=422,
+            detail="File has too few rows to be a valid statement.",
+        )
 
-    for i, row in enumerate(reader, start=2):  # row 1 = header
-        line_errors: list[str] = []
+    if ingest_result.status == STATUS_NOT_A_BANK_STATEMENT:
+        logger.warning(
+            "bank_statement_not_recognised",
+            extra={"applicant_id": applicant_id, "file": file_name},
+        )
+        raise HTTPException(
+            status_code=422,
+            detail="Missing recognizable date/amount columns.",
+        )
 
-        if is_standard:
-            raw_date = row.get("txn_date", "").strip()
-            raw_amount = row.get("amount", "").strip()
-            raw_type = row.get("txn_type", "").strip().lower()
-            raw_desc = row.get("description", "").strip()
-            raw_balance = row.get("balance_after", "").strip()
-        else:
-            # Resolve keys dynamically by checking lowercase substrings
-            date_key = next((k for k in row.keys() if k and "date" in k.lower()), None)
-            desc_key = next((k for k in row.keys() if k and "description" in k.lower()), None)
-            debit_key = next((k for k in row.keys() if k and "debit" in k.lower()), None)
-            credit_key = next((k for k in row.keys() if k and "credit" in k.lower()), None)
-            balance_key = next((k for k in row.keys() if k and "balance" in k.lower()), None)
+    if ingest_result.status == STATUS_LOW_CONFIDENCE:
+        logger.warning(
+            "bank_statement_low_confidence",
+            extra={
+                "applicant_id": applicant_id,
+                "file": file_name,
+                "confidence": ingest_result.confidence,
+            },
+        )
+        await _insert_review_queue(db, ingest_result, file_name, "low_confidence")
+        await db.commit()
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Could not confidently detect statement format "
+                f"(confidence {ingest_result.confidence:.0%}), routed for review."
+            ),
+        )
 
-            raw_date = row.get(date_key, "").strip() if date_key else ""
-            raw_desc = row.get(desc_key, "").strip() if desc_key else ""
-            raw_balance = row.get(balance_key, "").strip() if balance_key else ""
-            
-            debit_val = row.get(debit_key, "").strip() if debit_key else ""
-            credit_val = row.get(credit_key, "").strip() if credit_key else ""
+    if ingest_result.status == STATUS_RECONCILIATION_FAILED:
+        mismatches = (ingest_result.rows_checked if hasattr(ingest_result, "rows_checked") else "?")
+        checked = mismatches  # captured in error_detail
+        logger.error(
+            "bank_statement_reconciliation_failed",
+            extra={
+                "applicant_id": applicant_id,
+                "file": file_name,
+                "match_rate": ingest_result.match_rate,
+            },
+        )
+        await _insert_review_queue(db, ingest_result, file_name, "reconciliation_fail")
+        await db.commit()
+        raise HTTPException(
+            status_code=422,
+            detail=ingest_result.error_detail
+            or f"Balance didn't reconcile — mapping is likely wrong.",
+        )
 
-            # Check if this row is just an opening balance or note row
-            if not debit_val and not credit_val:
-                rows_skipped += 1
-                continue
+    # STATUS_OK or STATUS_RECONCILIATION_WARN
+    rows = ingest_result.rows or []
 
-            if credit_val:
-                raw_amount = credit_val
-                raw_type = "credit"
-            else:
-                raw_amount = debit_val
-                raw_type = "debit"
+    inserted, skipped = await _bulk_insert_rows(db, rows, applicant_id)
+    await _insert_upload_record(db, applicant_id, ingest_result, file_name, rows)
 
-        # ── 1. Clean and Parse Date ──
-        try:
-            # Strip low balance warning comments from balance/amounts
-            if "(" in raw_balance:
-                raw_balance = raw_balance.split("(")[0].strip()
-            if "(" in raw_amount:
-                raw_amount = raw_amount.split("(")[0].strip()
-
-            raw_amount = raw_amount.replace(",", "")
-            raw_balance = raw_balance.replace(",", "")
-
-            txn_date = parse_flexible_date(raw_date)
-        except ValueError as exc:
-            line_errors.append(f"Row {i}: invalid txn_date '{raw_date}' — {exc}")
-            txn_date = None  # type: ignore[assignment]
-
-        # ── 2. Parse Amount ──
-        try:
-            amount = Decimal(raw_amount)
-            if amount <= 0:
-                raise ValueError("must be positive")
-        except (InvalidOperation, ValueError):
-            line_errors.append(f"Row {i}: invalid amount '{raw_amount}'")
-            amount = None  # type: ignore[assignment]
-
-        # ── 3. Parse Type ──
-        txn_type = raw_type.strip().lower()
-        if txn_type not in VALID_TXN_TYPES:
-            line_errors.append(f"Row {i}: txn_type must be 'credit' or 'debit', got '{txn_type}'")
-
-        # ── 4. Parse Description ──
-        description = raw_desc.strip()[:255] or "—"
-
-        # ── 5. Parse Balance After ──
-        try:
-            balance_after = Decimal(raw_balance)
-        except (InvalidOperation, ValueError):
-            line_errors.append(f"Row {i}: invalid balance_after '{raw_balance}'")
-            balance_after = None  # type: ignore[assignment]
-
-        if line_errors:
-            errors.extend(line_errors)
-            rows_skipped += 1
-            continue
-
-        try:
-            await db.execute(
-                INSERT_SQL,
-                {
-                    "raw_id":       str(uuid.uuid4()),
-                    "applicant_id": applicant_id,
-                    "txn_date":     txn_date,
-                    "amount":       amount,
-                    "txn_type":     txn_type,
-                    "description":  description,
-                    "balance_after": balance_after,
-                    "ingested_at":  datetime.now(timezone.utc),
-                },
-            )
-            rows_inserted += 1
-        except Exception as exc:
-            errors.append(f"Row {i}: DB error — {exc}")
-            rows_skipped += 1
+    if ingest_result.status == STATUS_RECONCILIATION_WARN:
+        await _insert_review_queue(db, ingest_result, file_name, "reconciliation_warn")
+        await db.commit()
+        logger.warning(
+            "bank_statement_reconciliation_warn",
+            extra={
+                "applicant_id": applicant_id,
+                "file": file_name,
+                "match_rate": ingest_result.match_rate,
+            },
+        )
+        # 202 Accepted — rows stored, but manual review required
+        from fastapi.responses import JSONResponse
+        return JSONResponse(
+            status_code=202,
+            content=StatementUploadResult(
+                rows_inserted=inserted,
+                rows_skipped=skipped,
+                errors=[
+                    f"Statement partially reconciled ({ingest_result.match_rate:.0%}), "
+                    f"pending manual review before use."
+                ],
+                applicant_id=applicant_id,
+                reconciliation_verdict=ingest_result.verdict,
+                source_format=ingest_result.source_format,
+                confidence=ingest_result.confidence,
+            ).model_dump(),
+        )
 
     await db.commit()
-
+    logger.info(
+        "bank_statement_upload_ok",
+        extra={
+            "applicant_id": applicant_id,
+            "file": file_name,
+            "rows_inserted": inserted,
+            "source_format": ingest_result.source_format,
+        },
+    )
     return StatementUploadResult(
-        rows_inserted=rows_inserted,
-        rows_skipped=rows_skipped,
-        errors=errors[:20],
+        rows_inserted=inserted,
+        rows_skipped=skipped,
+        errors=[],
         applicant_id=applicant_id,
+        reconciliation_verdict=ingest_result.verdict,
+        source_format=ingest_result.source_format,
+        confidence=ingest_result.confidence,
     )

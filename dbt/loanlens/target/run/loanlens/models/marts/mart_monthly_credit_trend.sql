@@ -40,7 +40,7 @@ monthly_bounces as (
 
 monthly_balance as (
     select
-        applicant_id,
+        raw_applicant_id as applicant_id,
         date_trunc('month', txn_date)::date as month,
         avg(balance_after) as avg_balance,
         max(balance_after) - min(balance_after) as balance_swing

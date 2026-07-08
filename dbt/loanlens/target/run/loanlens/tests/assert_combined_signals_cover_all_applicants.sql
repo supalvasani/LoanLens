@@ -1,0 +1,17 @@
+
+    
+    select
+      count(*) as failures,
+      count(*) != 0 as should_warn,
+      count(*) != 0 as should_error
+    from (
+      
+    
+  select a.raw_applicant_id
+from "loanlens_db"."public_staging"."stg_applicants" a
+left join "loanlens_db"."public_intermediate"."int_combined_signals" s on a.raw_applicant_id = s.applicant_id
+where s.applicant_id is null
+  
+  
+      
+    ) dbt_internal_test

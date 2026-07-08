@@ -15,5 +15,7 @@ python-json-logger
 httpx
 faker
 psycopg2-binary
+pandas
+numpy
 pytest
 pytest-asyncio

@@ -6,14 +6,21 @@ Repository layer handles all DB queries.
 from __future__ import annotations
 
 from decimal import Decimal
+from datetime import datetime, timezone
 from typing import Any
+import uuid
 
-
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logger import logger
 from app.enums import ApplicationStatusEnum, LoanTypeEnum, RoleEnum
 from app.exceptions.domain import InsufficientPermissionsException, ResourceNotFoundException
+from app.ingestion.pipeline import (
+    ingest_statement,
+    STATUS_OK,
+    STATUS_RECONCILIATION_WARN,
+)
 from app.models.loan import RawLoanApplication
 from app.models.user import User
 from app.repositories.application_repository import ApplicationRepository
@@ -149,101 +156,57 @@ class ApplicationService:
             },
         )
 
-        # Ingest statement if file provided
-        # Ingest statement if file provided
+        # ── Ingest statement (universal pipeline) ───────────────────────────────
         if file is not None:
             raw_bytes = await file.read()
             if raw_bytes:
-                text_content = raw_bytes.decode("utf-8-sig")
-                reader = csv.DictReader(io.StringIO(text_content))
-                if reader.fieldnames:
-                    raw_headers = [h.strip() for h in reader.fieldnames if h]
-                    headers_lower = [h.lower() for h in raw_headers]
-
-                    is_standard = all(col in headers_lower for col in ["txn_date", "amount", "txn_type", "description", "balance_after"])
-                    is_banking = "date" in headers_lower and "description" in headers_lower and any("debit" in h for h in headers_lower) and any("credit" in h for h in headers_lower) and any("balance" in h for h in headers_lower)
-
-                    if is_standard or is_banking:
-                        def parse_flexible_date(date_str: str) -> date:
-                            try:
-                                return date.fromisoformat(date_str)
-                            except ValueError:
-                                pass
-                            for fmt in ("%d-%b-%Y", "%d-%B-%Y", "%d-%m-%Y", "%d/%m/%Y", "%Y/%m/%d"):
-                                try:
-                                    return datetime.strptime(date_str, fmt).date()
-                                except ValueError:
-                                    continue
-                            raise ValueError(f"Invalid format")
-
-                        INSERT_SQL = text("""
-                            INSERT INTO raw_transactions
-                                (raw_id, applicant_id, txn_date, amount, txn_type, description, balance_after, ingested_at)
-                            VALUES
-                                (:raw_id, :applicant_id, :txn_date, :amount, :txn_type, :description, :balance_after, :ingested_at)
-                            ON CONFLICT (raw_id) DO NOTHING
-                        """)
-
-                        for row in reader:
-                            if is_standard:
-                                raw_date = row.get("txn_date", "").strip()
-                                raw_amount = row.get("amount", "").strip()
-                                raw_type = row.get("txn_type", "").strip().lower()
-                                raw_desc = row.get("description", "").strip()
-                                raw_balance = row.get("balance_after", "").strip()
-                            else:
-                                date_key = next((k for k in row.keys() if k and "date" in k.lower()), None)
-                                desc_key = next((k for k in row.keys() if k and "description" in k.lower()), None)
-                                debit_key = next((k for k in row.keys() if k and "debit" in k.lower()), None)
-                                credit_key = next((k for k in row.keys() if k and "credit" in k.lower()), None)
-                                balance_key = next((k for k in row.keys() if k and "balance" in k.lower()), None)
-
-                                raw_date = row.get(date_key, "").strip() if date_key else ""
-                                raw_desc = row.get(desc_key, "").strip() if desc_key else ""
-                                raw_balance = row.get(balance_key, "").strip() if balance_key else ""
-                                
-                                debit_val = row.get(debit_key, "").strip() if debit_key else ""
-                                credit_val = row.get(credit_key, "").strip() if credit_key else ""
-
-                                if not debit_val and not credit_val:
-                                    continue
-
-                                if credit_val:
-                                    raw_amount = credit_val
-                                    raw_type = "credit"
-                                else:
-                                    raw_amount = debit_val
-                                    raw_type = "debit"
-
-                            try:
-                                if "(" in raw_balance:
-                                    raw_balance = raw_balance.split("(")[0].strip()
-                                if "(" in raw_amount:
-                                    raw_amount = raw_amount.split("(")[0].strip()
-
-                                raw_amount = raw_amount.replace(",", "")
-                                raw_balance = raw_balance.replace(",", "")
-
-                                txn_date = parse_flexible_date(raw_date)
-                                amount_val = Decimal(raw_amount)
-                                balance_val = Decimal(raw_balance)
-                                description_val = raw_desc.strip()[:255] or "—"
-                                
-                                await self.session.execute(
-                                    INSERT_SQL,
-                                    {
-                                        "raw_id":       str(uuid.uuid4()),
-                                        "applicant_id": str(applicant_id),
-                                        "txn_date":     txn_date,
-                                        "amount":       amount_val,
-                                        "txn_type":     raw_type.strip().lower(),
-                                        "description":  description_val,
-                                        "balance_after": balance_val,
-                                        "ingested_at":  datetime.now(timezone.utc),
-                                    }
-                                )
-                            except Exception:
-                                continue
+                ingest_result = ingest_statement(
+                    raw_bytes=raw_bytes,
+                    applicant_id=str(applicant_id),
+                    file_name=file.filename or "statement.csv",
+                    file_hash_lookup=lambda aid, h: False,   # dedup not enforced here
+                    registry_lookup=lambda headers: None,    # always use heuristic path
+                )
+                if ingest_result.status in (STATUS_OK, STATUS_RECONCILIATION_WARN):
+                    INSERT_SQL = text("""
+                        INSERT INTO raw_transactions
+                            (raw_id, raw_applicant_id, txn_date, amount, txn_type,
+                             description, balance_after, source_format,
+                             source_file_hash, ingested_at)
+                        VALUES
+                            (:raw_id, :raw_applicant_id, :txn_date, :amount, :txn_type,
+                             :description, :balance_after, :source_format,
+                             :source_file_hash, :ingested_at)
+                        ON CONFLICT (raw_id) DO NOTHING
+                    """)
+                    now = datetime.now(timezone.utc)
+                    for row in (ingest_result.rows or []):
+                        try:
+                            await self.session.execute(
+                                INSERT_SQL,
+                                {
+                                    "raw_id":           str(row["raw_id"]),
+                                    "raw_applicant_id": str(applicant_id),
+                                    "txn_date":         row["txn_date"],
+                                    "amount":           row["amount"],
+                                    "txn_type":         row["txn_type"],
+                                    "description":      row.get("description", "—"),
+                                    "balance_after":    row.get("balance_after"),
+                                    "source_format":    row.get("source_format", "heuristic"),
+                                    "source_file_hash": row.get("source_file_hash", ""),
+                                    "ingested_at":      now,
+                                },
+                            )
+                        except Exception:
+                            continue
+                else:
+                    logger.warning(
+                        "application_statement_ingest_skipped",
+                        extra={
+                            "status": ingest_result.status,
+                            "applicant_id": str(applicant_id),
+                        },
+                    )
 
         await self.session.commit()
         return LoanApplicationResponse.model_validate(application)

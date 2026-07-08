@@ -1,6 +1,6 @@
 with monthly_balance as (
     select
-        applicant_id,
+        raw_applicant_id,
         date_trunc('month', txn_date)::date as month,
         max(balance_after) as max_balance,
         min(balance_after) as min_balance,
@@ -17,7 +17,7 @@ recent as (
 
 stats as (
     select
-        applicant_id,
+        raw_applicant_id,
         avg(avg_balance) as avg_monthly_balance,
         avg(max_balance - min_balance) as avg_balance_swing,
         count(*) as months_tracked
@@ -37,4 +37,4 @@ select
         else 90
     end as balance_score
 from "loanlens_db"."public_staging"."stg_applicants" a
-left join stats s on a.raw_applicant_id = s.applicant_id
+left join stats s on a.raw_applicant_id = s.raw_applicant_id

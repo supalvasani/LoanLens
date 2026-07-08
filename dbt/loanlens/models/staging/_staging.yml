@@ -12,11 +12,14 @@ models:
         tests: [not_null]
 
   - name: stg_transactions
-    description: Cleaned bank transactions from raw layer
+    description: >
+      Pure type-cast pass over raw_transactions. All normalisation
+      (column detection, amount-pattern resolution, balance reconciliation)
+      happened upstream in the ingestion pipeline. No bank-specific logic here.
     columns:
       - name: raw_id
         tests: [not_null, unique]
-      - name: applicant_id
+      - name: raw_applicant_id
         tests:
           - not_null
           - relationships:
@@ -31,6 +34,10 @@ models:
           - not_null
           - accepted_values:
               values: ['credit', 'debit']
+      - name: source_format
+        tests: [not_null]
+      - name: source_file_hash
+        tests: [not_null]
 
   - name: stg_merchant_categories
     description: Merchant keyword to category mapping
