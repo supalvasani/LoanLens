@@ -55,8 +55,8 @@ ALL_HEADER_KEYWORDS: frozenset[str] = frozenset(
 # Known decoy columns that parse as numbers/dates but are NOT amount/date roles.
 # Matched case-insensitively against the lowered, stripped column name.
 _DECOY_PATTERNS = re.compile(
-    r"^(sl[\s._-]*no|serial[\s._-]*no|ref[\s._-]*no|cheque[\s._-]*no|"
-    r"day|month|year|chq[\s._-]*no|sr[\s._-]*no|sequence)$",
+    r"^(sl[\s._-]*no\.?|sl\.?|serial[\s._-]*no\.?|ref[\s._-]*no\.?|cheque[\s._-]*no\.?|"
+    r"day|month|year|chq[\s._-]*no\.?|sr[\s._-]*no\.?|sequence|s[\s._-]*no\.?)$",
     re.IGNORECASE,
 )
 
@@ -85,8 +85,28 @@ class ColumnMapping:
 
 # ── Scoring helpers ───────────────────────────────────────────────────────────
 
-def _is_decoy(col: str) -> bool:
-    return bool(_DECOY_PATTERNS.match(col.strip()))
+def _is_monotonic_sequence(series: pd.Series) -> bool:
+    """Data-driven decoy check: catches serial/index columns regardless of
+    header name. A strictly increasing integer sequence starting at 0/1
+    is almost never a real amount/balance/date field."""
+    sample = series.dropna().astype(str).head(50)
+    sample = [v.strip() for v in sample if v.strip()]
+    if len(sample) < 5:
+        return False
+    try:
+        nums = [int(float(v)) for v in sample]
+    except ValueError:
+        return False
+    diffs = [nums[i + 1] - nums[i] for i in range(len(nums) - 1)]
+    return all(d == 1 for d in diffs) and nums[0] in (0, 1)
+
+
+def _is_decoy(col: str, series: pd.Series = None) -> bool:
+    if _DECOY_PATTERNS.match(col.strip()):
+        return True
+    if series is not None and _is_monotonic_sequence(series):
+        return True
+    return False
 
 
 def _keyword_score(col: str, keyword_set: set[str]) -> float:
@@ -115,9 +135,11 @@ def _date_parse_rate(series: pd.Series) -> float:
     return parsed / len(sample)
 
 
-def _numeric_parse_rate(series: pd.Series) -> float:
+def _numeric_parse_rate(series: pd.Series, ignore_blanks: bool = False) -> float:
     """Fraction of non-null values that parse as a positive-or-zero number."""
     sample = series.dropna().astype(str).head(50)
+    if ignore_blanks:
+        sample = [v for v in sample if v.strip()]
     if len(sample) == 0:
         return 0.0
     parsed = 0
@@ -157,16 +179,16 @@ def _score_col(df: pd.DataFrame, col: str, role: str) -> float:
         v = _date_parse_rate(series)
     elif role == "debit":
         h = _keyword_score(col, _DEBIT_KEYWORDS)
-        v = _numeric_parse_rate(series)
+        v = _numeric_parse_rate(series, ignore_blanks=True)
     elif role == "credit":
         h = _keyword_score(col, _CREDIT_KEYWORDS)
-        v = _numeric_parse_rate(series)
+        v = _numeric_parse_rate(series, ignore_blanks=True)
     elif role == "amount":
         h = _keyword_score(col, _AMOUNT_KEYWORDS)
-        v = _numeric_parse_rate(series)
+        v = _numeric_parse_rate(series, ignore_blanks=False)
     elif role == "balance_after":
         h = _keyword_score(col, _BALANCE_KEYWORDS)
-        v = _numeric_parse_rate(series)
+        v = _numeric_parse_rate(series, ignore_blanks=False)
     elif role == "txn_type":
         h = _keyword_score(col, _TYPE_KEYWORDS)
         v = _type_flag_rate(series)
@@ -183,7 +205,7 @@ def _score_col(df: pd.DataFrame, col: str, role: str) -> float:
         h, v = 0.0, 0.0
 
     score = 0.5 * h + 0.5 * v
-    if _is_decoy(lower):
+    if _is_decoy(lower, series):
         score *= 0.4
     return round(score, 4)
 
@@ -215,10 +237,18 @@ def detect_header_row(raw_lines: list[str], max_scan: int = 30) -> int:
     """
     for i, line in enumerate(raw_lines[:max_scan]):
         cells = [c.strip().lower() for c in line.split(",")]
-        hits = sum(
-            1 for cell in cells
-            if any(kw in cell for kw in ALL_HEADER_KEYWORDS)
-        )
+        hits = 0
+        for cell in cells:
+            if not cell:
+                continue
+            for kw in ALL_HEADER_KEYWORDS:
+                # Normalise underscores and slashes to spaces for clean boundary checks
+                normalized_cell = cell.replace("_", " ").replace("/", " ")
+                normalized_kw = kw.replace("_", " ").replace("/", " ")
+                pattern = rf"\b{re.escape(normalized_kw)}\b"
+                if re.search(pattern, normalized_cell):
+                    hits += 1
+                    break
         if hits >= 2:
             return i
     return 0

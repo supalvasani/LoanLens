@@ -234,3 +234,72 @@ def test_drcr_no_slash_resolved():
     assert mapping.txn_type_col == "DrCr"
     assert mapping.amount_pattern == "flagged"
     assert mapping.confidence >= 0.55
+
+
+def test_detect_header_row_with_false_positive_preamble():
+    """Verify that detect_header_row ignores preamble rows containing words like 'Bandra' and 'Unnamed'."""
+    preamble_lines = [
+        "Corporate & Registered Office: 27BKC,C 27,G Block,Bandra Kurla Complex,Bandra (E),Mumbai - 400051,Unnamed: 6,Unnamed: 7",
+        "Date,Description,Debit,Credit,Balance",
+        "2024-01-01,Opening Balance,,50000,50000",
+    ]
+    skip = detect_header_row(preamble_lines)
+    assert skip == 1, f"Expected skip=1, got {skip}"
+
+
+def test_serial_column_not_chosen_as_credit_in_split_pattern():
+    """Regression: unlabeled/undotted serial column ('Sl.') must not win the
+    credit slot over the real Credit column just because the real column is
+    mostly blank (which is normal for split-pattern debit/credit columns).
+
+    Real-world case: Kotak Bank statement — 'Sl.' (1,2,3...), 'Dr Amt',
+    'Cr Amt' where most rows are debits, leaving Cr Amt sparsely populated.
+    """
+    n = 20
+    rows_sl, rows_dr, rows_cr, rows_desc = [], [], [], []
+    balance = 100000.0
+    for i in range(n):
+        rows_sl.append(str(i + 1))
+        if i % 5 == 0:  # occasional credit, mostly debits — mirrors real statement shape
+            rows_dr.append("")
+            rows_cr.append("5000.00")
+            balance += 500
+        else:
+            rows_dr.append("2000.00")
+            rows_cr.append("")
+            balance -= 2000
+        rows_desc.append(f"Txn {i}")
+
+    df = _make_df({
+        "Sl.": rows_sl,
+        "Value Dt": [f"2024-01-{i+1:02d}" for i in range(n)],
+        "Description": rows_desc,
+        "Dr Amt": rows_dr,
+        "Cr Amt": rows_cr,
+        "Running Bal": ["0"] * n,  # values irrelevant to this test
+    })
+    mapping = classify_columns(df)
+    assert "Sl." not in mapping.amount_cols, (
+        f"Serial column must never be chosen as an amount column, got {mapping.amount_cols}"
+    )
+    assert set(mapping.amount_cols) == {"Dr Amt", "Cr Amt"}, (
+        f"Expected ['Dr Amt', 'Cr Amt'], got {mapping.amount_cols}"
+    )
+    assert mapping.amount_pattern == "split"
+
+
+def test_bare_serial_without_no_suffix_flagged_as_decoy():
+    """'Sl.' (no 'No' suffix) must still be treated as a decoy via the
+    data-driven monotonic-sequence check, not just the name regex."""
+    df = _make_df({
+        "Sl.": ["1", "2", "3", "4", "5"],
+        "Date": [f"2024-01-{i+1:02d}" for i in range(5)],
+        "Description": ["A", "B", "C", "D", "E"],
+        "Amount": ["500", "1200", "300", "800", "150"],
+        "Balance": ["5000", "3800", "3500", "4300", "4150"],
+    })
+    mapping = classify_columns(df)
+    assert "Sl." not in mapping.amount_cols
+    assert "Sl." != mapping.txn_date_col
+
+

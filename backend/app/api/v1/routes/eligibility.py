@@ -24,13 +24,15 @@ router = APIRouter(prefix="/eligibility", tags=["Eligibility"])
 # ── Plain-language gap reason mapping ────────────────────────────────────────
 
 GAP_REASON_LABELS: dict[str, str] = {
-    "low_score":          "Credit score is below the minimum threshold",
-    "high_emi_burden":    "Too much income already committed to EMIs",
-    "high_bounce_rate":   "Too many payment failures in recent months",
-    "insufficient_income": "Declared income is too low for this loan amount",
-    "fraud_flag":         "Account flagged for suspicious activity",
-    "below_min_amount":   "Requested amount is below the minimum",
-    "above_max_amount":   "Requested amount exceeds the maximum allowed",
+    "low_score":             "Credit score is below the minimum threshold for this product",
+    "high_emi_burden":       "Existing EMI commitments exceed the allowed FOIR ceiling",
+    "high_bounce_rate":      "Too many payment failures or bounced transactions in recent months",
+    "insufficient_income":   "Detected income is too low for this loan amount",
+    "fraud_flag":            "Account has been flagged for suspicious activity",
+    "below_min_amount":      "Requested amount is below the product minimum",
+    "above_max_amount":      "Requested amount exceeds your eligible limit",
+    "insufficient_data":     "Less than the required months of bank statement data — eligible amount is indicative only",
+    "low_income_stability":  "Income has high variability across months — stability score below threshold",
 }
 
 LOAN_TYPE_LABELS: dict[str, str] = {
