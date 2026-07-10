@@ -23,7 +23,7 @@ from scripts.db_config import psycopg2_dsn
 
 fake = Faker("en_IN")
 Faker.seed(42)
-random.seed(42)
+random = random.SystemRandom()
 
 APPLICANT_COUNT = 500
 MIN_TXNS_PER_APPLICANT = 300

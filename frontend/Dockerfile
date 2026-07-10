@@ -14,12 +14,21 @@ RUN npm run build
 # Step 2: Serve Stage
 FROM nginx:alpine
 
-# Copy built assets
-COPY --from=build /app/dist /usr/share/nginx/html
+# Support running as non-root user in Nginx
+RUN touch /var/run/nginx.pid && \
+    chown -R nginx:nginx /var/run/nginx.pid /var/cache/nginx /var/log/nginx /etc/nginx/conf.d
 
-# Copy custom Nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy built assets with appropriate permissions
+COPY --chown=nginx:nginx --from=build /app/dist /usr/share/nginx/html
 
-EXPOSE 80
+# Copy custom Nginx configuration with appropriate permissions
+COPY --chown=nginx:nginx nginx.conf /etc/nginx/conf.d/default.conf
 
+# Expose non-privileged port
+EXPOSE 8080
+
+# Switch to non-root execution
+USER nginx
+
+# Start command
 CMD ["nginx", "-g", "daemon off;"]
