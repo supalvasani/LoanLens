@@ -252,6 +252,82 @@ def detect_header_row(raw_lines: list[str], max_scan: int = 30) -> int:
     return 0
 
 
+def _classify_date(df: pd.DataFrame, all_cols: list[str], mapping: ColumnMapping, claimed: set[str], scores_used: list[float]) -> None:
+    date_col, date_score = _best_col(df, all_cols, "txn_date", min_score=0.3)
+    if date_col:
+        mapping.txn_date_col = date_col
+        claimed.add(date_col)
+        scores_used.append(date_score)
+
+
+def _classify_balance(df: pd.DataFrame, all_cols: list[str], mapping: ColumnMapping, claimed: set[str], scores_used: list[float]) -> None:
+    remaining = [c for c in all_cols if c not in claimed]
+    balance_candidates = [
+        c for c in remaining
+        if _keyword_score(c, _BALANCE_KEYWORDS) > 0
+    ]
+    balance_col, balance_score = _best_col(df, balance_candidates, "balance_after", min_score=0.4)
+    if balance_col:
+        mapping.balance_col = balance_col
+        claimed.add(balance_col)
+        scores_used.append(balance_score)
+
+
+def _classify_amount_and_type(df: pd.DataFrame, all_cols: list[str], mapping: ColumnMapping, claimed: set[str], scores_used: list[float]) -> None:
+    remaining = [c for c in all_cols if c not in claimed]
+    type_col, type_score = _best_col(df, remaining, "txn_type", min_score=0.35)
+
+    remaining_for_amount = [c for c in all_cols if c not in claimed and c != type_col]
+
+    # Priority 1 — flagged: one amount col + a decent txn_type column
+    if type_col and type_score >= 0.45:
+        amt_col, amt_score = _best_col(df, remaining_for_amount, "amount", min_score=0.25)
+        if not amt_col:
+            amt_col, amt_score = _best_col(df, remaining_for_amount, "debit", min_score=0.25)
+        if amt_col and amt_score > 0.0:
+            mapping.amount_pattern = "flagged"
+            mapping.amount_cols = [amt_col]
+            mapping.txn_type_col = type_col
+            claimed.update({amt_col, type_col})
+            scores_used.extend([amt_score, type_score])
+            return
+
+    # Priority 2 — split: debit col + credit col (both numeric)
+    debit_col, debit_score = _best_col(df, remaining_for_amount, "debit", min_score=0.3)
+    if debit_col:
+        remaining2 = [c for c in remaining_for_amount if c != debit_col]
+        credit_col, credit_score = _best_col(df, remaining2, "credit", min_score=0.3)
+        if credit_col and credit_score > 0.0:
+            mapping.amount_pattern = "split"
+            mapping.amount_cols = [debit_col, credit_col]
+            claimed.update({debit_col, credit_col})
+            scores_used.extend([debit_score, credit_score])
+            return
+
+    # Priority 3 — signed: single numeric column
+    amt_col, amt_score = _best_col(df, remaining_for_amount, "amount", min_score=0.2)
+    if not amt_col:
+        amt_col, amt_score = _best_col(df, remaining_for_amount, "debit", min_score=0.2)
+    if amt_col:
+        mapping.amount_pattern = "signed"
+        mapping.amount_cols = [amt_col]
+        claimed.add(amt_col)
+        scores_used.append(amt_score)
+
+
+def _classify_description(df: pd.DataFrame, all_cols: list[str], mapping: ColumnMapping, claimed: set[str], scores_used: list[float]) -> None:
+    desc_candidates = [c for c in all_cols if c not in claimed]
+    desc_scored = sorted(
+        [(c, _score_col(df, c, "description")) for c in desc_candidates],
+        key=lambda x: x[1],
+        reverse=True,
+    )
+    desc_cols = [c for c, s in desc_scored if s >= 0.25]
+    if desc_cols:
+        mapping.description_cols = desc_cols
+        scores_used.append(desc_scored[0][1])
+
+
 # ── Main classifier ───────────────────────────────────────────────────────────
 
 def classify_columns(df: pd.DataFrame) -> ColumnMapping:
@@ -268,87 +344,11 @@ def classify_columns(df: pd.DataFrame) -> ColumnMapping:
     claimed: set[str] = set()
     scores_used: list[float] = []
 
-    # ── Step 1: date ──────────────────────────────────────────────────────────
-    date_col, date_score = _best_col(df, all_cols, "txn_date", min_score=0.3)
-    if date_col:
-        mapping.txn_date_col = date_col
-        claimed.add(date_col)
-        scores_used.append(date_score)
+    _classify_date(df, all_cols, mapping, claimed, scores_used)
+    _classify_balance(df, all_cols, mapping, claimed, scores_used)
+    _classify_amount_and_type(df, all_cols, mapping, claimed, scores_used)
+    _classify_description(df, all_cols, mapping, claimed, scores_used)
 
-    # ── Step 2: balance_after (claim BEFORE amount scoring) ───────────────────
-    remaining = [c for c in all_cols if c not in claimed]
-    # Require a keyword score component > 0 so a bare numeric column (e.g. 'Txn Amount')
-    # is never mistakenly claimed as the balance column.
-    balance_candidates = [
-        c for c in remaining
-        if _keyword_score(c, _BALANCE_KEYWORDS) > 0
-    ]
-    balance_col, balance_score = _best_col(df, balance_candidates, "balance_after", min_score=0.4)
-    if balance_col:
-        mapping.balance_col = balance_col
-        claimed.add(balance_col)
-        scores_used.append(balance_score)
-
-    # ── Step 3: txn_type (for flagged-pattern detection) ─────────────────────
-    remaining = [c for c in all_cols if c not in claimed]
-    type_col, type_score = _best_col(df, remaining, "txn_type", min_score=0.35)
-    # Tentatively claim; only confirmed if we use the flagged pattern
-
-    # ── Step 4: resolve amount pattern ───────────────────────────────────────
-    remaining_for_amount = [c for c in all_cols if c not in claimed and c != type_col]
-
-    # Priority 1 — flagged: one amount col + a decent txn_type column
-    if type_col and type_score >= 0.45:
-        amt_col, amt_score = _best_col(df, remaining_for_amount, "amount", min_score=0.25)
-        if not amt_col:
-            # Fall back to any numeric column
-            amt_col, amt_score = _best_col(df, remaining_for_amount, "debit", min_score=0.25)
-        if amt_col and amt_score > 0.0:
-            mapping.amount_pattern = "flagged"
-            mapping.amount_cols = [amt_col]
-            mapping.txn_type_col = type_col
-            claimed.update({amt_col, type_col})
-            scores_used.extend([amt_score, type_score])
-        else:
-            type_col = None  # couldn't pair it, fall through
-
-    if not mapping.amount_cols:
-        # Priority 2 — split: debit col + credit col (both numeric)
-        debit_col, debit_score = _best_col(df, remaining_for_amount, "debit", min_score=0.3)
-        if debit_col:
-            remaining2 = [c for c in remaining_for_amount if c != debit_col]
-            credit_col, credit_score = _best_col(df, remaining2, "credit", min_score=0.3)
-            if credit_col and credit_score > 0.0:
-                mapping.amount_pattern = "split"
-                mapping.amount_cols = [debit_col, credit_col]
-                claimed.update({debit_col, credit_col})
-                scores_used.extend([debit_score, credit_score])
-
-    if not mapping.amount_cols:
-        # Priority 3 — signed: single numeric column
-        amt_col, amt_score = _best_col(df, remaining_for_amount, "amount", min_score=0.2)
-        if not amt_col:
-            amt_col, amt_score = _best_col(df, remaining_for_amount, "debit", min_score=0.2)
-        if amt_col:
-            mapping.amount_pattern = "signed"
-            mapping.amount_cols = [amt_col]
-            claimed.add(amt_col)
-            scores_used.append(amt_score)
-
-    # ── Step 5: description (coalesce multiple columns) ───────────────────────
-    desc_candidates = [c for c in all_cols if c not in claimed]
-    desc_scored = sorted(
-        [(c, _score_col(df, c, "description")) for c in desc_candidates],
-        key=lambda x: x[1],
-        reverse=True,
-    )
-    # Include all columns with score ≥ 0.25 — they are coalesced left-to-right
-    desc_cols = [c for c, s in desc_scored if s >= 0.25]
-    if desc_cols:
-        mapping.description_cols = desc_cols
-        scores_used.append(desc_scored[0][1])
-
-    # ── Confidence = min of all role scores that contributed ─────────────────
     mapping.confidence = round(min(scores_used, default=0.0), 4)
 
     return mapping

@@ -8,6 +8,7 @@ import {
   useEffect,
   useState,
   useCallback,
+  useMemo,
   type ReactNode,
 } from 'react';
 import { jwtDecode } from 'jwt-decode';
@@ -38,7 +39,7 @@ function isTokenExpired(token: string): boolean {
 
 // ── Provider ─────────────────────────────────────────────────────────────────
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({ children }: Readonly<{ children: ReactNode }>) {
   const [state, setState] = useState<AuthState>({
     user: null,
     accessToken: null,
@@ -120,8 +121,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const contextValue = useMemo(() => ({
+    ...state,
+    login,
+    logout,
+  }), [state, login, logout]);
+
   return (
-    <AuthContext.Provider value={{ ...state, login, logout }}>
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );

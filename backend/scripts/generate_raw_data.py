@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import csv
-import random
+import secrets
 import uuid
 from datetime import UTC, date, datetime, timedelta
 from decimal import ROUND_HALF_UP, Decimal
@@ -23,7 +23,36 @@ from scripts.db_config import psycopg2_dsn
 
 fake = Faker("en_IN")
 Faker.seed(42)
-random = random.SystemRandom()
+
+
+def _randint(min_val: int, max_val: int) -> int:
+    return min_val + secrets.randbelow(max_val - min_val + 1)
+
+
+def _uniform(min_val: float, max_val: float) -> float:
+    return min_val + (max_val - min_val) * (secrets.randbelow(1000000) / 1000000.0)
+
+
+def _choice(seq):
+    return secrets.choice(seq)
+
+
+def _choices(seq, weights=None):
+    if weights is None:
+        return [secrets.choice(seq)]
+    total = sum(weights)
+    r = _uniform(0, total)
+    upto = 0.0
+    for item, w in zip(seq, weights):
+        if upto + w >= r:
+            return [item]
+        upto += w
+    return [seq[-1]]
+
+
+def _random() -> float:
+    return secrets.randbelow(1000000) / 1000000.0
+
 
 APPLICANT_COUNT = 500
 MIN_TXNS_PER_APPLICANT = 300
@@ -62,13 +91,13 @@ def _money(value: float) -> Decimal:
 def _pan() -> str:
     letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     return (
-        f"{random.choice(letters)}{random.choice(letters)}{random.choice(letters)}{random.choice(letters)}{random.choice(letters)}"
-        f"{random.randint(1000, 9999)}{random.choice(letters)}"
+        f"{_choice(letters)}{_choice(letters)}{_choice(letters)}{_choice(letters)}{_choice(letters)}"
+        f"{_randint(1000, 9999)}{_choice(letters)}"
     )
 
 
 def _phone() -> str:
-    return f"+91{random.randint(7000000000, 9999999999)}"
+    return f"+91{_randint(7000000000, 9999999999)}"
 
 
 def _db_dsn() -> str:
@@ -86,19 +115,97 @@ def generate_applicants() -> list[dict]:
                 "name": fake.name(),
                 "pan_number": _pan(),
                 "phone": _phone(),
-                "city": random.choice(INDIAN_CITIES),
-                "monthly_income_declared": str(_money(random.uniform(25000, 250000))),
+                "city": _choice(INDIAN_CITIES),
+                "monthly_income_declared": str(_money(_uniform(25000, 250000))),
             }
         )
     return applicants
 
 
 def _salary_day() -> int:
-    return random.choice([1, 5])
+    return _choice([1, 5])
 
 
 def _emi_day(salary_day: int) -> int:
-    return random.choice([d for d in (7, 10, 15, 20) if d != salary_day])
+    return _choice([d for d in (7, 10, 15, 20) if d != salary_day])
+
+
+def _generate_salary_txn(
+    raw_applicant_id: str,
+    month_cursor: date,
+    salary_day: int,
+    month_end: date,
+    start_date: date,
+    monthly_income: float,
+    balance: Decimal,
+    transactions: list[dict],
+) -> Decimal:
+    salary_date = min(date(month_cursor.year, month_cursor.month, salary_day), month_end)
+    if salary_date >= start_date:
+        amount = _money(monthly_income * _uniform(0.95, 1.05))
+        balance += amount
+        transactions.append(
+            _txn(raw_applicant_id, salary_date, amount, "credit", "SALARY CREDIT - NEFT", balance)
+        )
+    return balance
+
+
+def _generate_emi_txn(
+    raw_applicant_id: str,
+    month_cursor: date,
+    emi_day: int,
+    month_end: date,
+    start_date: date,
+    monthly_income: float,
+    balance: Decimal,
+    transactions: list[dict],
+) -> Decimal:
+    emi_date = min(date(month_cursor.year, month_cursor.month, emi_day), month_end)
+    if emi_date >= start_date:
+        emi_amount = _money(monthly_income * _uniform(0.15, 0.35))
+        if balance >= emi_amount:
+            balance -= emi_amount
+            transactions.append(
+                _txn(raw_applicant_id, emi_date, emi_amount, "debit", _choice(EMI_KEYWORDS), balance)
+            )
+        elif _random() < 0.25:
+            bounce_amount = _money(emi_amount * 0.1)
+            transactions.append(
+                _txn(raw_applicant_id, emi_date, bounce_amount, "debit", "ECS RETURN CHARGES - INSUFFICIENT FUNDS", balance)
+            )
+    return balance
+
+
+def _generate_random_txn(
+    raw_applicant_id: str,
+    start_date: date,
+    end_date: date,
+    balance: Decimal,
+    transactions: list[dict],
+) -> Decimal:
+    txn_date = start_date + timedelta(days=_randint(0, (end_date - start_date).days))
+    kind = _choices(["upi", "utility", "cash", "transfer"], weights=[45, 20, 15, 20])[0]
+    if kind == "upi":
+        amount = _money(_uniform(50, 5000))
+        desc = f"UPI/{_choice(UPI_MERCHANTS)}"
+    elif kind == "utility":
+        amount = _money(_uniform(200, 8000))
+        desc = _choice(UTILITY_MERCHANTS)
+    elif kind == "cash":
+        amount = _money(_uniform(500, 15000))
+        desc = "ATM CASH WITHDRAWAL"
+    else:
+        amount = _money(_uniform(1000, 50000))
+        desc = "IMPS TRANSFER"
+
+    if _random() < 0.35:
+        balance += amount
+        transactions.append(_txn(raw_applicant_id, txn_date, amount, "credit", desc, balance))
+    else:
+        if balance >= amount:
+            balance -= amount
+            transactions.append(_txn(raw_applicant_id, txn_date, amount, "debit", desc, balance))
+    return balance
 
 
 def generate_transactions(applicants: list[dict], end_date: date) -> list[dict]:
@@ -108,62 +215,25 @@ def generate_transactions(applicants: list[dict], end_date: date) -> list[dict]:
         monthly_income = float(applicant["monthly_income_declared"])
         salary_day = _salary_day()
         emi_day = _emi_day(salary_day)
-        months = random.randint(HISTORY_MONTHS_MIN, HISTORY_MONTHS_MAX)
+        months = _randint(HISTORY_MONTHS_MIN, HISTORY_MONTHS_MAX)
         start_date = end_date - timedelta(days=months * 31)
-        balance = _money(monthly_income * random.uniform(0.5, 2.0))
-        txn_count = random.randint(MIN_TXNS_PER_APPLICANT, MAX_TXNS_PER_APPLICANT)
+        balance = _money(monthly_income * _uniform(0.5, 2.0))
+        txn_count = _randint(MIN_TXNS_PER_APPLICANT, MAX_TXNS_PER_APPLICANT)
 
         month_cursor = start_date.replace(day=1)
         while month_cursor <= end_date:
             month_end = (month_cursor.replace(day=28) + timedelta(days=4)).replace(day=1) - timedelta(days=1)
-            salary_date = min(date(month_cursor.year, month_cursor.month, salary_day), month_end)
-            if salary_date >= start_date:
-                amount = _money(monthly_income * random.uniform(0.95, 1.05))
-                balance += amount
-                transactions.append(
-                    _txn(raw_applicant_id, salary_date, amount, "credit", "SALARY CREDIT - NEFT", balance)
-                )
-
-            emi_date = min(date(month_cursor.year, month_cursor.month, emi_day), month_end)
-            if emi_date >= start_date:
-                emi_amount = _money(monthly_income * random.uniform(0.15, 0.35))
-                if balance >= emi_amount:
-                    balance -= emi_amount
-                    transactions.append(
-                        _txn(raw_applicant_id, emi_date, emi_amount, "debit", random.choice(EMI_KEYWORDS), balance)
-                    )
-                elif random.random() < 0.25:
-                    bounce_amount = _money(emi_amount * 0.1)
-                    transactions.append(
-                        _txn(raw_applicant_id, emi_date, bounce_amount, "debit", "ECS RETURN CHARGES - INSUFFICIENT FUNDS", balance)
-                    )
-
+            balance = _generate_salary_txn(
+                raw_applicant_id, month_cursor, salary_day, month_end, start_date, monthly_income, balance, transactions
+            )
+            balance = _generate_emi_txn(
+                raw_applicant_id, month_cursor, emi_day, month_end, start_date, monthly_income, balance, transactions
+            )
             month_cursor = (month_cursor.replace(day=28) + timedelta(days=4)).replace(day=1)
 
         remaining = txn_count - len([t for t in transactions if t["raw_applicant_id"] == raw_applicant_id])
         for _ in range(max(0, remaining)):
-            txn_date = start_date + timedelta(days=random.randint(0, (end_date - start_date).days))
-            kind = random.choices(["upi", "utility", "cash", "transfer"], weights=[45, 20, 15, 20])[0]
-            if kind == "upi":
-                amount = _money(random.uniform(50, 5000))
-                desc = f"UPI/{random.choice(UPI_MERCHANTS)}"
-            elif kind == "utility":
-                amount = _money(random.uniform(200, 8000))
-                desc = random.choice(UTILITY_MERCHANTS)
-            elif kind == "cash":
-                amount = _money(random.uniform(500, 15000))
-                desc = "ATM CASH WITHDRAWAL"
-            else:
-                amount = _money(random.uniform(1000, 50000))
-                desc = "IMPS TRANSFER"
-
-            if random.random() < 0.35:
-                balance += amount
-                transactions.append(_txn(raw_applicant_id, txn_date, amount, "credit", desc, balance))
-            else:
-                if balance >= amount:
-                    balance -= amount
-                    transactions.append(_txn(raw_applicant_id, txn_date, amount, "debit", desc, balance))
+            balance = _generate_random_txn(raw_applicant_id, start_date, end_date, balance, transactions)
 
     transactions.sort(key=lambda row: (row["raw_applicant_id"], row["txn_date"]))
     return transactions

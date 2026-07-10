@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
@@ -29,15 +30,14 @@ def _raise_http(exc: DomainException) -> None:
 
 @router.get(
     "/queue",
-    response_model=list[ManagerQueueItem],
     status_code=status.HTTP_200_OK,
     summary="Manager: view escalation queue sorted by priority",
 )
 @limiter.limit("60/minute")
 async def get_manager_queue(
     request: Request,
-    manager: User = Depends(require_role(RoleEnum.manager)),
-    db: AsyncSession = Depends(get_db),
+    manager: Annotated[User, Depends(require_role(RoleEnum.manager))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[ManagerQueueItem]:
     try:
         return await ManagerService(db).list_queue(manager)
@@ -49,7 +49,6 @@ async def get_manager_queue(
 
 @router.get(
     "/applications/{application_id}",
-    response_model=ManagerApplicationResponse,
     status_code=status.HTTP_200_OK,
     summary="Manager: view full credit report for escalated application",
 )
@@ -57,8 +56,8 @@ async def get_manager_queue(
 async def get_escalated_application(
     request: Request,
     application_id: UUID,
-    manager: User = Depends(require_role(RoleEnum.manager)),
-    db: AsyncSession = Depends(get_db),
+    manager: Annotated[User, Depends(require_role(RoleEnum.manager))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ManagerApplicationResponse:
     try:
         return await ManagerService(db).get_application(application_id, manager)
@@ -70,15 +69,14 @@ async def get_escalated_application(
 
 @router.get(
     "/portfolio",
-    response_model=PortfolioDTO,
     status_code=status.HTTP_200_OK,
     summary="Manager: view portfolio aggregated analytics",
 )
 @limiter.limit("60/minute")
 async def get_portfolio_analytics(
     request: Request,
-    manager: User = Depends(require_role(RoleEnum.manager)),
-    db: AsyncSession = Depends(get_db),
+    manager: Annotated[User, Depends(require_role(RoleEnum.manager))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> PortfolioDTO:
     try:
         return await ManagerService(db).get_portfolio_analytics(manager)
@@ -90,15 +88,14 @@ async def get_portfolio_analytics(
 
 @router.get(
     "/config",
-    response_model=list[LoanTypeConfigResponse],
     status_code=status.HTTP_200_OK,
     summary="Manager: view current loan type configurations",
 )
 @limiter.limit("120/minute")
 async def list_loan_configs(
     request: Request,
-    manager: User = Depends(require_role(RoleEnum.manager)),
-    db: AsyncSession = Depends(get_db),
+    manager: Annotated[User, Depends(require_role(RoleEnum.manager))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[LoanTypeConfigResponse]:
     try:
         return await ManagerService(db).list_configs(manager)
@@ -110,7 +107,6 @@ async def list_loan_configs(
 
 @router.put(
     "/config/{loan_type}",
-    response_model=LoanTypeConfigResponse,
     status_code=status.HTTP_200_OK,
     summary="Manager: update specific loan type thresholds",
 )
@@ -119,8 +115,8 @@ async def update_loan_config(
     request: Request,
     loan_type: LoanTypeEnum,
     payload: ConfigUpdateDTO,
-    manager: User = Depends(require_role(RoleEnum.manager)),
-    db: AsyncSession = Depends(get_db),
+    manager: Annotated[User, Depends(require_role(RoleEnum.manager))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> LoanTypeConfigResponse:
     try:
         return await ManagerService(db).update_config(loan_type, manager, payload)

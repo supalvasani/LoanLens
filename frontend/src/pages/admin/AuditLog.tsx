@@ -23,11 +23,11 @@ const ACTION_BADGE: Record<string, CSSProperties> = {
   apply:            { backgroundColor: 'rgba(56,189,248,.1)', color: '#0284c7' },
 };
 
-function ActionBadge({ action }: { action: string }) {
+function ActionBadge({ action }: Readonly<{ action: string }>) {
   const style = ACTION_BADGE[action] ?? { backgroundColor: 'rgba(148,163,184,.1)', color: '#64748b' };
   return (
     <span className="badge" style={{ ...style, fontSize: '11px', padding: '2px 8px' }}>
-      {action.replace(/_/g, ' ')}
+      {action.replaceAll('_', ' ')}
     </span>
   );
 }
@@ -44,14 +44,16 @@ export default function AdminAudit() {
   const PAGE_SIZE = 25;
 
   function load(offset = 0) {
-    setLoading(true);
+    Promise.resolve().then(() => {
+      setLoading(true);
+    });
     adminService.getAuditLog({ limit: PAGE_SIZE, offset, action: actionFilter || undefined })
       .then(data => setLogs(data))
       .catch(() => setError('Failed to load audit log.'))
       .finally(() => setLoading(false));
   }
 
-  useEffect(() => { setPage(0); load(0); }, [actionFilter]); // eslint-disable-line
+  useEffect(() => { load(0); }, [actionFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filtered = logs.filter(l =>
     l.action.includes(search.toLowerCase()) ||
@@ -60,6 +62,48 @@ export default function AdminAudit() {
   );
 
   const uniqueActions = [...new Set(logs.map(l => l.action))].sort((a, b) => a.localeCompare(b));
+
+  const renderTableContent = () => {
+    if (loading) {
+      return (
+        <tr>
+          <td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--t3)' }}>
+            <span className="spinner" /> Loading audit log…
+          </td>
+        </tr>
+      );
+    }
+    if (filtered.length === 0) {
+      return (
+        <tr>
+          <td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--t3)' }}>
+            No entries found.
+          </td>
+        </tr>
+      );
+    }
+    return filtered.map(log => {
+      const hasChanges = log.old_value || log.new_value;
+      const isExpanded = expanded === log.log_id;
+      return (
+        <tr key={log.log_id}>
+          <td style={{ color: 'var(--t3)', fontSize: 12 }}>{new Date(log.created_at).toLocaleString('en-IN')}</td>
+          <td><ActionBadge action={log.action} /></td>
+          <td style={{ textTransform: 'capitalize', fontSize: 12 }}>{log.target_type}</td>
+          <td><code style={{ fontSize: 11, background: 'rgba(99,102,241,0.1)', color: '#818cf8', padding: '2px 5px', borderRadius: 4 }}>{log.target_id.substring(0, 8)}</code></td>
+          <td>
+            {hasChanges ? (
+              <div>
+                <button className="btn btn-ghost btn-sm" style={{ padding: '2px 6px', fontSize: 11 }} onClick={() => setExpanded(isExpanded ? null : log.log_id)}>
+                  {isExpanded ? 'Hide changes' : 'Show changes'}
+                </button>
+              </div>
+            ) : <span style={{ color: 'var(--t3)', fontSize: 11 }}>—</span>}
+          </td>
+        </tr>
+      );
+    });
+  };
 
   return (
     <DashboardShell
@@ -80,12 +124,15 @@ export default function AdminAudit() {
         <select
           className="form-input"
           value={actionFilter}
-          onChange={e => setActionFilter(e.target.value)}
+          onChange={e => {
+            setActionFilter(e.target.value);
+            setPage(0);
+          }}
           style={{ maxWidth: 200 }}
         >
           <option value="">All Actions</option>
           {uniqueActions.map(a => (
-            <option key={a} value={a}>{a.replace(/_/g, ' ')}</option>
+            <option key={a} value={a}>{a.replaceAll('_', ' ')}</option>
           ))}
         </select>
         <button className="btn btn-ghost btn-sm" onClick={() => load(page * PAGE_SIZE)}>↻ Refresh</button>
@@ -104,60 +151,7 @@ export default function AdminAudit() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--t3)' }}>
-                <span className="spinner" /> Loading audit log…
-              </td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={5} style={{ textAlign: 'center', padding: 40, color: 'var(--t3)' }}>No entries found.</td></tr>
-            ) : filtered.map(log => {
-              const hasChanges = log.old_value || log.new_value;
-              return (
-                <>
-                  <tr
-                    key={log.log_id}
-                    style={{ cursor: hasChanges ? 'pointer' : 'default' }}
-                    onClick={() => hasChanges && setExpanded(expanded === log.log_id ? null : log.log_id)}
-                  >
-                    <td style={{ color: 'var(--t3)', fontSize: 12, fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                      {new Date(log.created_at).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit', hour12: true })}
-                    </td>
-                    <td><ActionBadge action={log.action} /></td>
-                    <td style={{ fontSize: 12, color: 'var(--t2)' }}>{log.target_type}</td>
-                    <td style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--t3)' }}>
-                      {log.target_id?.slice(0, 12)}{log.target_id?.length > 12 ? '…' : ''}
-                    </td>
-                    <td style={{ color: 'var(--t3)', fontSize: 12 }}>
-                      {hasChanges ? (
-                        <span style={{ color: 'var(--ink)', fontSize: 11 }}>
-                          {expanded === log.log_id ? '▲ Hide' : '▼ Show diff'}
-                        </span>
-                      ) : '—'}
-                    </td>
-                  </tr>
-                  {expanded === log.log_id && (
-                    <tr key={`${log.log_id}-expand`}>
-                      <td colSpan={5} style={{ padding: 0, background: 'var(--bg)' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, borderTop: '1px solid var(--border)' }}>
-                          <div style={{ padding: '12px 16px' }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--t3)', marginBottom: 6, letterSpacing: '.07em' }}>Before</div>
-                            <pre style={{ fontSize: 11, color: 'var(--t2)', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                              {log.old_value ? JSON.stringify(log.old_value, null, 2) : 'null'}
-                            </pre>
-                          </div>
-                          <div style={{ padding: '12px 16px', borderLeft: '1px solid var(--border)' }}>
-                            <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', color: 'var(--ok)', marginBottom: 6, letterSpacing: '.07em' }}>After</div>
-                            <pre style={{ fontSize: 11, color: 'var(--t2)', fontFamily: 'monospace', whiteSpace: 'pre-wrap', wordBreak: 'break-all' }}>
-                              {log.new_value ? JSON.stringify(log.new_value, null, 2) : 'null'}
-                            </pre>
-                          </div>
-                        </div>
-                      </td>
-                    </tr>
-                  )}
-                </>
-              );
-            })}
+            {renderTableContent()}
           </tbody>
         </table>
 

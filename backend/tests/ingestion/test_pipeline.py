@@ -116,7 +116,6 @@ def _run(raw_bytes: bytes, *, applicant_id: str = APPLICANT_ID, registry=None):
     return ingest_statement(
         raw_bytes=raw_bytes,
         applicant_id=applicant_id,
-        file_name="test.csv",
         file_hash_lookup=_hash_lookup,
         registry_lookup=registry or _no_registry,
     )
@@ -165,7 +164,6 @@ def test_duplicate_file_rejected():
     result1 = ingest_statement(
         raw_bytes=raw,
         applicant_id=APPLICANT_ID,
-        file_name="stmt.csv",
         file_hash_lookup=lambda a, h: False,   # first upload: not seen
         registry_lookup=_no_registry,
     )
@@ -174,7 +172,6 @@ def test_duplicate_file_rejected():
     result2 = ingest_statement(
         raw_bytes=raw,
         applicant_id=APPLICANT_ID,
-        file_name="stmt.csv",
         file_hash_lookup=_lookup,              # second upload: already seen
         registry_lookup=_no_registry,
     )
@@ -264,7 +261,6 @@ def test_registry_fast_path_tagged():
     result = ingest_statement(
         raw_bytes=raw,
         applicant_id=APPLICANT_ID,
-        file_name="stmt.csv",
         file_hash_lookup=lambda a, h: False,
         registry_lookup=_registry,
     )

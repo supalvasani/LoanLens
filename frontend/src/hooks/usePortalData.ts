@@ -18,7 +18,7 @@ interface UsePortalDataReturn {
 export function usePortalData(): UsePortalDataReturn {
   const [apps, setApps]           = useState<(LoanApplication & { primary_rejection_reason?: string | null })[]>([]);
   const [score, setScore]         = useState<CreditScoreData | null>(null);
-  const [eligibility, setElig]    = useState<EligibilityData | null>(null);
+  const [eligibility, setEligibility] = useState<EligibilityData | null>(null);
   const [loading, setLoading]     = useState(true);
   const [tick, setTick]           = useState(0);
 
@@ -39,7 +39,7 @@ export function usePortalData(): UsePortalDataReturn {
     ]).then(([appsResult, scoreResult, eligResult]) => {
       if (appsResult.status === 'fulfilled') setApps(appsResult.value);
       if (scoreResult.status === 'fulfilled') setScore(scoreResult.value);
-      if (eligResult.status === 'fulfilled')  setElig(eligResult.value);
+      if (eligResult.status === 'fulfilled')  setEligibility(eligResult.value);
     }).finally(() => setLoading(false));
   }, [tick]);
 

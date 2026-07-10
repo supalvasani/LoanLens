@@ -7,15 +7,17 @@ import { DashboardShell } from '../../components/DashboardShell';
 import { adminService } from '../../services/adminService';
 import type { AdminConfigResponse } from '../../types/admin';
 
+interface EditModalProps {
+  readonly config: AdminConfigResponse;
+  readonly onSave: () => void;
+  readonly onClose: () => void;
+}
+
 function EditModal({
   config,
   onSave,
   onClose,
-}: {
-  config: AdminConfigResponse;
-  onSave: () => void;
-  onClose: () => void;
-}) {
+}: Readonly<EditModalProps>) {
   const [form, setForm] = useState({
     min_score:                  config.min_score,
     max_amount:                 config.max_amount,
@@ -61,7 +63,7 @@ function EditModal({
           <div>
             <div style={{ fontWeight: 700, fontSize: 15 }}>Edit Config</div>
             <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 2 }}>
-              {config.loan_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+              {config.loan_type.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
             </div>
           </div>
           <button className="btn btn-ghost btn-sm" onClick={onClose}>✕</button>
@@ -136,7 +138,7 @@ export default function AdminConfig() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
               <div>
                 <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--t1)' }}>
-                  {c.loan_type.replace(/_/g, ' ').replace(/\b\w/g, ch => ch.toUpperCase())}
+                  {c.loan_type.replaceAll('_', ' ').replace(/\b\w/g, ch => ch.toUpperCase())}
                 </div>
                 {c.updated_at && (
                   <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 2 }}>

@@ -4,6 +4,7 @@ All escalation logic lives in decision_service.py — never here.
 Routes are HTTP-only.
 """
 
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Body, Depends, Request, status
@@ -38,7 +39,6 @@ def _raise_domain(exc: DomainException) -> None:
 
 @router.post(
     "/decisions/{application_id}",
-    response_model=DecisionResponse,
     status_code=status.HTTP_200_OK,
     summary="Manager: approve or reject escalated application (final authority)",
 )
@@ -47,8 +47,8 @@ async def manager_decide_short(
     request: Request,
     application_id: UUID,
     payload: ManagerDecisionDTO,
-    manager: User = Depends(require_role(RoleEnum.manager, RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    manager: Annotated[User, Depends(require_role(RoleEnum.manager, RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DecisionResponse:
     """
     Manager/Admin final decision on an escalated application.
@@ -65,7 +65,6 @@ async def manager_decide_short(
 
 @router.post(
     "/decisions/{application_id}/analyst",
-    response_model=DecisionResponse,
     status_code=status.HTTP_200_OK,
     summary="Analyst: approve or reject (score must be outside grey zone)",
 )
@@ -74,8 +73,8 @@ async def analyst_close(
     request: Request,
     application_id: UUID,
     payload: AnalystDecisionRequest,
-    analyst: User = Depends(require_role(RoleEnum.analyst)),
-    db: AsyncSession = Depends(get_db),
+    analyst: Annotated[User, Depends(require_role(RoleEnum.analyst))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DecisionResponse:
     """
     Analyst closes a non-escalated application.
@@ -94,7 +93,6 @@ async def analyst_close(
 
 @router.post(
     "/decisions/{application_id}/escalate",
-    response_model=DecisionResponse,
     status_code=status.HTTP_200_OK,
     summary="Analyst: escalate to Bank Manager (notes required)",
 )
@@ -102,9 +100,9 @@ async def analyst_close(
 async def analyst_escalate(
     request: Request,
     application_id: UUID,
-    notes: str = Body(..., min_length=10, max_length=2000, embed=True),
-    analyst: User = Depends(require_role(RoleEnum.analyst)),
-    db: AsyncSession = Depends(get_db),
+    analyst: Annotated[User, Depends(require_role(RoleEnum.analyst))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    notes: Annotated[str, Body(min_length=10, max_length=2000, embed=True)],
 ) -> DecisionResponse:
     """
     Analyst escalates a grey-zone / fraud-flagged / above-threshold application.
@@ -120,7 +118,6 @@ async def analyst_escalate(
 
 @router.post(
     "/decisions/{application_id}/manager",
-    response_model=DecisionResponse,
     status_code=status.HTTP_200_OK,
     summary="Manager: final approve or reject on escalated application (legacy endpoint)",
 )
@@ -129,8 +126,8 @@ async def manager_decide(
     request: Request,
     application_id: UUID,
     payload: ManagerDecisionRequest,
-    manager: User = Depends(require_role(RoleEnum.manager, RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    manager: Annotated[User, Depends(require_role(RoleEnum.manager, RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DecisionResponse:
     """
     Manager has final authority on escalated applications.
@@ -146,7 +143,6 @@ async def manager_decide(
 
 @router.put(
     "/applications/{application_id}/override",
-    response_model=DecisionResponse,
     status_code=status.HTTP_200_OK,
     summary="Admin: override any decision regardless of status",
 )
@@ -155,8 +151,8 @@ async def admin_override(
     request: Request,
     application_id: UUID,
     payload: AdminOverrideRequest,
-    admin: User = Depends(require_role(RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    admin: Annotated[User, Depends(require_role(RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> DecisionResponse:
     """
     Admin-only.  Overrides any application decision regardless of current status.

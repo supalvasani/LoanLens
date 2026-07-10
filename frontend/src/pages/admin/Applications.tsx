@@ -101,6 +101,77 @@ export default function AdminApplications() {
   const escalatedCount = applications.filter(a => a.status === 'escalated').length;
   const approvedCount = applications.filter(a => a.status === 'approved').length;
 
+  const renderTableContent = () => {
+    if (loading) {
+      return (
+        <tr>
+          <td colSpan={7} style={{ textAlign: 'center', padding: '40px 0' }}>
+            <span className="spinner"></span> Loading applications directory...
+          </td>
+        </tr>
+      );
+    }
+    if (sorted.length === 0) {
+      return (
+        <tr>
+          <td colSpan={7} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--t3)' }}>
+            No applications found matching the current filters.
+          </td>
+        </tr>
+      );
+    }
+    return sorted.map((app) => (
+      <tr key={app.application_id}>
+        <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
+          {new Date(app.submitted_at).toLocaleDateString('en-IN', {
+            day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+          })}
+        </td>
+        <td>
+          <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{getUserName(app.user_id)}</div>
+          <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{getUserEmail(app.user_id)}</div>
+        </td>
+        <td>
+          <code style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>
+            {app.application_id.substring(0, 8)}...
+          </code>
+        </td>
+        <td style={{ textTransform: 'capitalize' }}>
+          {loanTypeLabelMap[app.loan_type] || app.loan_type.replaceAll('_', ' ')}
+        </td>
+        <td style={{ fontWeight: 600 }}>
+          ₹{Number(app.amount_requested).toLocaleString('en-IN')}
+        </td>
+        <td>
+          <span 
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              border: '1px solid',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              fontSize: '11px',
+              fontWeight: 600,
+              textTransform: 'uppercase',
+              letterSpacing: '0.03em',
+              ...STATUS_BADGE[app.status]
+            }}
+          >
+            {app.status.replaceAll('_', ' ')}
+          </span>
+        </td>
+        <td style={{ textAlign: 'right' }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            onClick={() => setSelectedApp(app)}
+          >
+            Audit Details
+          </button>
+        </td>
+      </tr>
+    ));
+  };
+
   return (
     <DashboardShell
       title="Application Directory"
@@ -187,70 +258,7 @@ export default function AdminApplications() {
                 </tr>
               </thead>
               <tbody>
-                {loading ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '40px 0' }}>
-                      <span className="spinner"></span> Loading applications directory...
-                    </td>
-                  </tr>
-                ) : sorted.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} style={{ textAlign: 'center', padding: '40px 0', color: 'var(--t3)' }}>
-                      No applications found matching the current filters.
-                    </td>
-                  </tr>
-                ) : (
-                  sorted.map((app) => (
-                    <tr key={app.application_id}>
-                      <td style={{ color: 'var(--color-text-muted)', fontSize: 13 }}>
-                        {new Date(app.submitted_at).toLocaleDateString('en-IN', {
-                          day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
-                        })}
-                      </td>
-                      <td>
-                        <div style={{ fontWeight: 600, color: 'var(--color-text-primary)' }}>{getUserName(app.user_id)}</div>
-                        <div style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>{getUserEmail(app.user_id)}</div>
-                      </td>
-                      <td>
-                        <code style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>
-                          {app.application_id.substring(0, 8)}...
-                        </code>
-                      </td>
-                      <td style={{ textTransform: 'capitalize' }}>
-                        {loanTypeLabelMap[app.loan_type] || app.loan_type.replace(/_/g, ' ')}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>
-                        ₹{Number(app.amount_requested).toLocaleString('en-IN')}
-                      </td>
-                      <td>
-                        <span 
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            border: '1px solid',
-                            padding: '2px 8px',
-                            borderRadius: '4px',
-                            fontSize: '11px',
-                            fontWeight: 600,
-                            textTransform: 'uppercase',
-                            letterSpacing: '0.03em',
-                            ...STATUS_BADGE[app.status]
-                          }}
-                        >
-                          {app.status.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-                      <td style={{ textAlign: 'right' }}>
-                        <button
-                          className="btn btn-secondary btn-sm"
-                          onClick={() => setSelectedApp(app)}
-                        >
-                          Audit Details
-                        </button>
-                      </td>
-                    </tr>
-                  ))
-                )}
+                {renderTableContent()}
               </tbody>
             </table>
           </div>

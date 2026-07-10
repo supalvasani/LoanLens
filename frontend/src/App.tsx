@@ -48,10 +48,10 @@ import { type Role, roleRedirect } from './types/auth';
 
 
 // ── Route wrapper helper ───────────────────────────────────────────────────────
-function R({ roles, children }: { roles: Role[]; children: React.ReactNode }) {
+function R({ roles, children }: Readonly<{ roles: readonly Role[]; children: React.ReactNode }>) {
   return (
     <RequireAuth>
-      <RequireRole allowedRoles={roles}>{children}</RequireRole>
+      <RequireRole allowedRoles={[...roles]}>{children}</RequireRole>
     </RequireAuth>
   );
 }

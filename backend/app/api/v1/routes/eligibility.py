@@ -7,6 +7,7 @@ Gracefully returns empty list when dbt hasn't run yet.
 from __future__ import annotations
 
 from decimal import Decimal
+from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
@@ -70,15 +71,14 @@ class EligibilityResponse(BaseModel):
 
 @router.get(
     "/me",
-    response_model=EligibilityResponse,
     status_code=status.HTTP_200_OK,
     summary="Get own loan eligibility across all types (applicant only)",
 )
 @limiter.limit("60/minute")
 async def get_my_eligibility(
     request: Request,
-    current_user: User = Depends(require_role(RoleEnum.applicant)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.applicant))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> EligibilityResponse:
     """
     Returns mart_loan_eligibility for the authenticated applicant across

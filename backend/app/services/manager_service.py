@@ -50,6 +50,60 @@ class ManagerService:
 
     # ── Manager Queue ─────────────────────────────────────────────────────────
 
+    async def _enrich_queue_item(self, app: Any) -> ManagerQueueItem:
+        applicant_id = await self.mart_repo.get_applicant_id_for_user(app.user_id)
+
+        # Fetch mart data + decisions in parallel
+        async def _none() -> None:
+            await asyncio.sleep(0)
+            return None
+
+        score_task = self.mart_repo.get_credit_score(applicant_id) if applicant_id else _none()
+        fraud_task = self.mart_repo.get_fraud_flags(applicant_id) if applicant_id else _none()
+        name_task = self.mart_repo.get_applicant_name(applicant_id) if applicant_id else _none()
+        config_task = self.config_repo.get_by_loan_type(app.loan_type)
+        decisions_task = self.decision_repo.get_all_for_application(app.application_id)
+
+        score_row, fraud_rows, applicant_name, config, decisions = await asyncio.gather(
+            score_task, fraud_task, name_task, config_task, decisions_task
+        )
+
+        score = float(score_row["score"]) if score_row and score_row.get("score") is not None else None
+        fraud_flags = [FraudFlagData(**f) for f in fraud_rows] if fraud_rows else []
+
+        # Find latest escalation decision details
+        escalation_reason: str | None = None
+        escalated_at: datetime | None = None
+        escalated_by_name: str | None = None
+
+        escalation_dec = next((d for d in decisions if d.decision == DecisionEnum.escalated), None)
+        if escalation_dec:
+            escalation_reason = escalation_dec.notes
+            escalated_at = escalation_dec.decided_at
+            analyst = await self.user_repo.get_by_id(escalation_dec.decided_by)
+            if analyst:
+                escalated_by_name = analyst.name
+
+        # Store manager threshold amount for priority check
+        manager_threshold = config.manager_threshold_amount if config else None
+
+        # Create item
+        item = ManagerQueueItem(
+            application_id=app.application_id,
+            applicant_name=applicant_name,
+            loan_type=app.loan_type,
+            amount_requested=app.amount_requested,
+            score=score,
+            fraud_flags=fraud_flags,
+            escalation_reason=escalation_reason,
+            escalated_at=escalated_at,
+            escalated_by_name=escalated_by_name,
+        )
+
+        # Keep threshold attached dynamically for sorting helper
+        setattr(item, "_manager_threshold", manager_threshold)
+        return item
+
     async def list_queue(self, manager: User) -> list[ManagerQueueItem]:
         """Returns only escalated applications, sorted by priority.
 
@@ -69,61 +123,7 @@ class ManagerService:
             limit=500,
         )
 
-        async def _none() -> None:
-            await asyncio.sleep(0)
-            return None
-
-        async def _enrich(app: Any) -> ManagerQueueItem:
-            applicant_id = await self.mart_repo.get_applicant_id_for_user(app.user_id)
-
-            # Fetch mart data + decisions in parallel
-            score_task = self.mart_repo.get_credit_score(applicant_id) if applicant_id else _none()
-            fraud_task = self.mart_repo.get_fraud_flags(applicant_id) if applicant_id else _none()
-            name_task = self.mart_repo.get_applicant_name(applicant_id) if applicant_id else _none()
-            config_task = self.config_repo.get_by_loan_type(app.loan_type)
-            decisions_task = self.decision_repo.get_all_for_application(app.application_id)
-
-            score_row, fraud_rows, applicant_name, config, decisions = await asyncio.gather(
-                score_task, fraud_task, name_task, config_task, decisions_task
-            )
-
-            score = float(score_row["score"]) if score_row and score_row.get("score") is not None else None
-            fraud_flags = [FraudFlagData(**f) for f in fraud_rows] if fraud_rows else []
-
-            # Find latest escalation decision details
-            escalation_reason: str | None = None
-            escalated_at: datetime | None = None
-            escalated_by_name: str | None = None
-
-            escalation_dec = next((d for d in decisions if d.decision == DecisionEnum.escalated), None)
-            if escalation_dec:
-                escalation_reason = escalation_dec.notes
-                escalated_at = escalation_dec.decided_at
-                analyst = await self.user_repo.get_by_id(escalation_dec.decided_by)
-                if analyst:
-                    escalated_by_name = analyst.name
-
-            # Store manager threshold amount for priority check
-            manager_threshold = config.manager_threshold_amount if config else None
-
-            # Create item
-            item = ManagerQueueItem(
-                application_id=app.application_id,
-                applicant_name=applicant_name,
-                loan_type=app.loan_type,
-                amount_requested=app.amount_requested,
-                score=score,
-                fraud_flags=fraud_flags,
-                escalation_reason=escalation_reason,
-                escalated_at=escalated_at,
-                escalated_by_name=escalated_by_name,
-            )
-
-            # Keep threshold attached dynamically for sorting helper
-            setattr(item, "_manager_threshold", manager_threshold)
-            return item
-
-        items = await asyncio.gather(*[_enrich(a) for a in raw_apps])
+        items = await asyncio.gather(*[self._enrich_queue_item(a) for a in raw_apps])
 
         # Priority Sort Key Helper
         def get_sort_key(itm: ManagerQueueItem) -> tuple[int, float]:

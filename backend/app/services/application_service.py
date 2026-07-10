@@ -96,6 +96,58 @@ class ApplicationService:
         )
         return LoanApplicationResponse.model_validate(application)
 
+    async def _ingest_attached_file(self, file: Any, applicant_id: uuid.UUID) -> None:
+        raw_bytes = await file.read()
+        if not raw_bytes:
+            return
+
+        ingest_result = ingest_statement(
+            raw_bytes=raw_bytes,
+            applicant_id=str(applicant_id),
+            file_hash_lookup=lambda aid, h: False,   # dedup not enforced here
+            registry_lookup=lambda headers: None,    # always use heuristic path
+        )
+        if ingest_result.status in (STATUS_OK, STATUS_RECONCILIATION_WARN):
+            INSERT_SQL = text("""
+                INSERT INTO raw_transactions
+                    (raw_id, raw_applicant_id, txn_date, amount, txn_type,
+                     description, balance_after, source_format,
+                     source_file_hash, ingested_at)
+                VALUES
+                    (:raw_id, :raw_applicant_id, :txn_date, :amount, :txn_type,
+                     :description, :balance_after, :source_format,
+                     :source_file_hash, :ingested_at)
+                ON CONFLICT (raw_id) DO NOTHING
+            """)
+            now = datetime.now(UTC)
+            for row in (ingest_result.rows or []):
+                try:
+                    await self.session.execute(
+                        INSERT_SQL,
+                        {
+                            "raw_id":           str(row["raw_id"]),
+                            "raw_applicant_id": str(applicant_id),
+                            "txn_date":         row["txn_date"],
+                            "amount":           row["amount"],
+                            "txn_type":         row["txn_type"],
+                            "description":      row.get("description", "—"),
+                            "balance_after":    row.get("balance_after"),
+                            "source_format":    row.get("source_format", "heuristic"),
+                            "source_file_hash": row.get("source_file_hash", ""),
+                            "ingested_at":      now,
+                        },
+                    )
+                except Exception:
+                    continue
+        else:
+            logger.warning(
+                "application_statement_ingest_skipped",
+                extra={
+                    "status": ingest_result.status,
+                    "applicant_id": str(applicant_id),
+                },
+            )
+
     async def create_application_with_file(
         self,
         *,
@@ -153,55 +205,7 @@ class ApplicationService:
 
         # ── Ingest statement (universal pipeline) ───────────────────────────────
         if file is not None:
-            raw_bytes = await file.read()
-            if raw_bytes:
-                ingest_result = ingest_statement(
-                    raw_bytes=raw_bytes,
-                    applicant_id=str(applicant_id),
-                    file_name=file.filename or "statement.csv",
-                    file_hash_lookup=lambda aid, h: False,   # dedup not enforced here
-                    registry_lookup=lambda headers: None,    # always use heuristic path
-                )
-                if ingest_result.status in (STATUS_OK, STATUS_RECONCILIATION_WARN):
-                    INSERT_SQL = text("""
-                        INSERT INTO raw_transactions
-                            (raw_id, raw_applicant_id, txn_date, amount, txn_type,
-                             description, balance_after, source_format,
-                             source_file_hash, ingested_at)
-                        VALUES
-                            (:raw_id, :raw_applicant_id, :txn_date, :amount, :txn_type,
-                             :description, :balance_after, :source_format,
-                             :source_file_hash, :ingested_at)
-                        ON CONFLICT (raw_id) DO NOTHING
-                    """)
-                    now = datetime.now(UTC)
-                    for row in (ingest_result.rows or []):
-                        try:
-                            await self.session.execute(
-                                INSERT_SQL,
-                                {
-                                    "raw_id":           str(row["raw_id"]),
-                                    "raw_applicant_id": str(applicant_id),
-                                    "txn_date":         row["txn_date"],
-                                    "amount":           row["amount"],
-                                    "txn_type":         row["txn_type"],
-                                    "description":      row.get("description", "—"),
-                                    "balance_after":    row.get("balance_after"),
-                                    "source_format":    row.get("source_format", "heuristic"),
-                                    "source_file_hash": row.get("source_file_hash", ""),
-                                    "ingested_at":      now,
-                                },
-                            )
-                        except Exception:
-                            continue
-                else:
-                    logger.warning(
-                        "application_statement_ingest_skipped",
-                        extra={
-                            "status": ingest_result.status,
-                            "applicant_id": str(applicant_id),
-                        },
-                    )
+            await self._ingest_attached_file(file, applicant_id)
 
         await self.session.commit()
         return LoanApplicationResponse.model_validate(application)
@@ -228,6 +232,36 @@ class ApplicationService:
             offset=offset,
         )
         return [LoanApplicationResponse.model_validate(a) for a in applications]
+
+    def _filter_queue_items(
+        self,
+        items: list[AnalystQueueItem],
+        score_min: float | None,
+        score_max: float | None,
+        risk_segment: str | None,
+        recommendation: str | None,
+    ) -> list[AnalystQueueItem]:
+        result: list[AnalystQueueItem] = []
+        for item in items:
+            if score_min is not None and (item.score is None or item.score < score_min):
+                continue
+            if score_max is not None and (item.score is None or item.score > score_max):
+                continue
+            if risk_segment is not None and (item.risk_tier or "").lower() != risk_segment.lower():
+                continue
+            if recommendation is not None and (item.recommendation or "").lower() != recommendation.lower():
+                continue
+            result.append(item)
+        return result
+
+    def _sort_queue_items(self, items: list[AnalystQueueItem], sort_by: str, sort_dir: str) -> None:
+        reverse = sort_dir.lower() == "desc"
+        if sort_by == "score":
+            items.sort(key=lambda x: (x.score is None, x.score or 0), reverse=reverse)
+        elif sort_by == "amount_requested":
+            items.sort(key=lambda x: float(x.amount_requested), reverse=reverse)
+        else:  # default: submitted_at
+            items.sort(key=lambda x: x.submitted_at, reverse=reverse)
 
     async def list_analyst_queue(
         self,
@@ -308,30 +342,36 @@ class ApplicationService:
         items = await asyncio.gather(*[_enrich(a) for a in raw_apps])
 
         # 3. Apply mart-level filters (cannot be done in DB query)
-        result: list[AnalystQueueItem] = []
-        for item in items:
-            if score_min is not None and (item.score is None or item.score < score_min):
-                continue
-            if score_max is not None and (item.score is None or item.score > score_max):
-                continue
-            if risk_segment is not None and (item.risk_tier or "").lower() != risk_segment.lower():
-                continue
-            if recommendation is not None and (item.recommendation or "").lower() != recommendation.lower():
-                continue
-            result.append(item)
+        result = self._filter_queue_items(items, score_min, score_max, risk_segment, recommendation)
 
         # 4. Sort
-        reverse = sort_dir.lower() == "desc"
-        if sort_by == "score":
-            result.sort(key=lambda x: (x.score is None, x.score or 0), reverse=reverse)
-        elif sort_by == "amount_requested":
-            result.sort(key=lambda x: float(x.amount_requested), reverse=reverse)
-        else:  # default: submitted_at
-            result.sort(key=lambda x: x.submitted_at, reverse=reverse)
+        self._sort_queue_items(result, sort_by, sort_dir)
 
         # 5. Paginate
         return result[offset: offset + limit]
 
+
+    async def _resolve_rejection_reason(self, application_id: uuid.UUID, user_id: uuid.UUID, loan_type: str) -> str:
+        # Find last decision notes
+        decisions = await self.decision_repo.get_all_for_application(application_id)
+        rejections = [d for d in decisions if d.decision.value == "rejected"]
+        if rejections and rejections[-1].notes:
+            return rejections[-1].notes
+
+        # Fallback to credit score recommendation or gap reason
+        applicant_id = await self.mart_repo.get_applicant_id_for_user(user_id)
+        if applicant_id:
+            elig = await self.mart_repo.get_loan_eligibility(applicant_id, loan_type)
+            if elig and elig[0].get("gap_reason"):
+                from app.api.v1.routes.eligibility import GAP_REASON_LABELS
+                raw_gap = elig[0]["gap_reason"]
+                return GAP_REASON_LABELS.get(raw_gap, raw_gap.replace("_", " ").title())
+
+            score_row = await self.mart_repo.get_credit_score(applicant_id)
+            if score_row and score_row.get("recommendation"):
+                return score_row["recommendation"]
+
+        return "Application did not meet NBFC risk thresholds"
 
     async def get_my_applications(
         self,
@@ -347,28 +387,9 @@ class ApplicationService:
         for app in apps:
             reason = None
             if app.status == ApplicationStatusEnum.rejected:
-                # Find last decision notes
-                decisions = await self.decision_repo.get_all_for_application(app.application_id)
-                rejections = [d for d in decisions if d.decision.value == "rejected"]
-                if rejections:
-                    # Use the latest rejection notes
-                    reason = rejections[-1].notes
-                if not reason:
-                    # Fallback to credit score recommendation or gap reason
-                    applicant_id = await self.mart_repo.get_applicant_id_for_user(current_user.user_id)
-                    if applicant_id:
-                        elig = await self.mart_repo.get_loan_eligibility(applicant_id, app.loan_type.value)
-                        if elig and elig[0].get("gap_reason"):
-                            from app.api.v1.routes.eligibility import GAP_REASON_LABELS
-                            raw_gap = elig[0]["gap_reason"]
-                            reason = GAP_REASON_LABELS.get(raw_gap, raw_gap.replace("_", " ").title())
-                        else:
-                            score_row = await self.mart_repo.get_credit_score(applicant_id)
-                            if score_row and score_row.get("recommendation"):
-                                reason = score_row["recommendation"]
-                
-                if not reason:
-                    reason = "Application did not meet NBFC risk thresholds"
+                reason = await self._resolve_rejection_reason(
+                    app.application_id, current_user.user_id, app.loan_type.value
+                )
 
             res.append({
                 "application_id": app.application_id,
@@ -381,6 +402,14 @@ class ApplicationService:
         return res
 
     # ── Get Single Application (with mart data) ───────────────────────────────
+
+    def _enforce_role_gate(self, application, current_user: User) -> None:
+        if current_user.role == RoleEnum.applicant and application.user_id != current_user.user_id:
+            raise InsufficientPermissionsException()
+        if current_user.role == RoleEnum.manager and application.status != ApplicationStatusEnum.escalated:
+            raise InsufficientPermissionsException()
+        if current_user.role == RoleEnum.analyst and application.status == ApplicationStatusEnum.escalated:
+            raise InsufficientPermissionsException()
 
     async def get_application_full(
         self,
@@ -407,15 +436,7 @@ class ApplicationService:
             raise ResourceNotFoundException("Application", application_id)
 
         # Role gate
-        if current_user.role == RoleEnum.applicant:
-            if application.user_id != current_user.user_id:
-                raise InsufficientPermissionsException()
-        elif current_user.role == RoleEnum.manager:
-            if application.status != ApplicationStatusEnum.escalated:
-                raise InsufficientPermissionsException()
-        elif current_user.role == RoleEnum.analyst:
-            if application.status == ApplicationStatusEnum.escalated:
-                raise InsufficientPermissionsException()
+        self._enforce_role_gate(application, current_user)
 
         # Resolve applicant_id from raw_applicants (user → applicant mapping)
         applicant_id = await self.mart_repo.get_applicant_id_for_user(application.user_id)

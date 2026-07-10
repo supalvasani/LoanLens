@@ -23,7 +23,7 @@ function createChatMessage(role: 'user' | 'bot', content: string): ChatMessage {
   return { role, content, ts: Date.now() };
 }
 
-export function ChatbotPanel({ mode, placeholder }: ChatbotProps) {
+export function ChatbotPanel({ mode, placeholder }: Readonly<ChatbotProps>) {
   const [messages, setMessages] = useState<ChatMessage[]>(() => getInitialMessages(mode));
   const [input, setInput]           = useState('');
   const [applicantId, setApplicantId] = useState('');
@@ -78,9 +78,9 @@ export function ChatbotPanel({ mode, placeholder }: ChatbotProps) {
 
       {/* Message log */}
       <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, padding: '4px 0', marginBottom: 16 }}>
-        {messages.map((msg, i) => (
+        {messages.map((msg) => (
           <div
-            key={i}
+            key={`${msg.role}-${msg.ts}-${msg.content.substring(0, 15)}`}
             style={{
               display: 'flex',
               justifyContent: msg.role === 'user' ? 'flex-end' : 'flex-start',

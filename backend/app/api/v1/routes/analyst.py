@@ -4,7 +4,7 @@ All business logic lives in ApplicationService — routes are HTTP-only.
 Every route is protected by @require_role(RoleEnum.analyst).
 Request latency is logged by the global middleware in main.py.
 """
-from typing import Literal
+from typing import Annotated, Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -33,24 +33,23 @@ def _http(exc: DomainException) -> None:
 
 @router.get(
     "/applications",
-    response_model=list[AnalystQueueItem],
     status_code=status.HTTP_200_OK,
     summary="Analyst: enriched application queue with mart-data filters",
 )
 @limiter.limit(_QUEUE_LIMIT)
 async def list_analyst_applications(
     request: Request,
-    score_min: float | None = Query(default=None, ge=0, le=100, description="Min credit score"),
-    score_max: float | None = Query(default=None, ge=0, le=100, description="Max credit score"),
-    risk_segment: str | None = Query(default=None, description="low | medium | high"),
-    loan_type: LoanTypeEnum | None = Query(default=None),
-    recommendation: str | None = Query(default=None, description="approve | review | reject"),
-    sort_by: Literal["score", "submitted_at", "amount_requested"] = Query(default="submitted_at"),
-    sort_dir: Literal["asc", "desc"] = Query(default="desc"),
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-    analyst: User = Depends(require_role(RoleEnum.analyst)),
-    db: AsyncSession = Depends(get_db),
+    analyst: Annotated[User, Depends(require_role(RoleEnum.analyst))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    score_min: Annotated[float | None, Query(default=None, ge=0, le=100, description="Min credit score")] = None,
+    score_max: Annotated[float | None, Query(default=None, ge=0, le=100, description="Max credit score")] = None,
+    risk_segment: Annotated[str | None, Query(default=None, description="low | medium | high")] = None,
+    loan_type: Annotated[LoanTypeEnum | None, Query(default=None)] = None,
+    recommendation: Annotated[str | None, Query(default=None, description="approve | review | reject")] = None,
+    sort_by: Annotated[Literal["score", "submitted_at", "amount_requested"], Query(default="submitted_at")] = "submitted_at",
+    sort_dir: Annotated[Literal["asc", "desc"], Query(default="desc")] = "desc",
+    limit: Annotated[int, Query(default=50, ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(default=0, ge=0)] = 0,
 ) -> list[AnalystQueueItem]:
     """
     Returns all non-escalated applications enriched with mart data.
@@ -85,7 +84,6 @@ async def list_analyst_applications(
 
 @router.get(
     "/applications/{application_id}",
-    response_model=ApplicationWithMartDataResponse,
     status_code=status.HTTP_200_OK,
     summary="Analyst: full credit report for one applicant",
 )
@@ -93,8 +91,8 @@ async def list_analyst_applications(
 async def get_analyst_application(
     request: Request,
     application_id: UUID,
-    analyst: User = Depends(require_role(RoleEnum.analyst)),
-    db: AsyncSession = Depends(get_db),
+    analyst: Annotated[User, Depends(require_role(RoleEnum.analyst))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ApplicationWithMartDataResponse:
     """
     Returns the full application with all mart data:

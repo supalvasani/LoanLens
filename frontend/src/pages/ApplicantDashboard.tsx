@@ -2,6 +2,29 @@ import { useState } from 'react';
 import { DashboardShell } from '../components/DashboardShell';
 import { useAuth } from '../hooks/useAuth';
 
+function getStepBg(done: boolean, active: boolean): string {
+  if (done) return 'var(--color-success)';
+  if (active) return 'var(--color-brand-primary)';
+  return 'rgba(255,255,255,0.06)';
+}
+
+function getStepBorder(done: boolean, active: boolean): string {
+  const color = done ? 'var(--color-success)' : active ? 'var(--color-brand-primary)' : 'rgba(255,255,255,0.1)';
+  return `2px solid ${color}`;
+}
+
+function getStepContent(done: boolean, active: boolean, index: number): React.ReactNode {
+  if (done) return '✓';
+  if (active) return '⟳';
+  return index + 1;
+}
+
+function getStepTextColor(done: boolean, active: boolean): string {
+  if (done) return '#4ade80';
+  if (active) return '#818cf8';
+  return 'var(--color-text-muted)';
+}
+
 const MY_APPLICATIONS = [
   {
     id: 'APP-20041',
@@ -49,10 +72,23 @@ const LOAN_TYPES = [
 const CREDIT_SCORE = 712;
 const CREDIT_MAX   = 900;
 
-function CreditScoreRing({ score }: { score: number }) {
+function getCreditColor(score: number): string {
+  if (score < 550) return 'var(--color-danger)';
+  if (score < 680) return 'var(--color-warning)';
+  return 'var(--color-success)';
+}
+
+function getCreditLabel(score: number): string {
+  if (score < 550) return 'Poor';
+  if (score < 650) return 'Fair';
+  if (score < 720) return 'Good';
+  return 'Excellent';
+}
+
+function CreditScoreRing({ score }: Readonly<{ score: number }>) {
   const pct = score / CREDIT_MAX;
-  const color = score < 550 ? 'var(--color-danger)' : score < 680 ? 'var(--color-warning)' : 'var(--color-success)';
-  const label = score < 550 ? 'Poor' : score < 650 ? 'Fair' : score < 720 ? 'Good' : 'Excellent';
+  const color = getCreditColor(score);
+  const label = getCreditLabel(score);
   const r = 52;
   const circ = 2 * Math.PI * r;
   const offset = circ * (1 - pct);
@@ -109,11 +145,16 @@ export default function ApplicantDashboard() {
       {/* Quick apply modal (simplified overlay) */}
       {showApply && (
         <div
+          role="button"
+          tabIndex={0}
           onClick={() => setShowApply(false)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') setShowApply(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
         >
           <div
+            role="presentation"
             onClick={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
             className="card animate-slideup"
             style={{ width: '100%', maxWidth: 500, padding: 32 }}
           >
@@ -172,16 +213,16 @@ export default function ApplicantDashboard() {
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
                       <div style={{
                         width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: step.done ? 'var(--color-success)' : step.active ? 'var(--color-brand-primary)' : 'rgba(255,255,255,0.06)',
-                        border: `2px solid ${step.done ? 'var(--color-success)' : step.active ? 'var(--color-brand-primary)' : 'rgba(255,255,255,0.1)'}`,
+                        background: getStepBg(step.done, !!step.active),
+                        border: getStepBorder(step.done, !!step.active),
                         fontSize: 12, color: '#fff',
                         boxShadow: step.active ? '0 0 12px rgba(99,102,241,0.5)' : 'none',
                         flexShrink: 0,
                         animation: step.active ? 'pulse-glow 2s ease-in-out infinite' : 'none',
                       }}>
-                        {step.done ? '✓' : step.active ? '⟳' : i + 1}
+                        {getStepContent(step.done, !!step.active, i)}
                       </div>
-                      <div style={{ fontSize: 9, color: step.done ? '#4ade80' : step.active ? '#818cf8' : 'var(--color-text-muted)', marginTop: 4, textAlign: 'center', lineHeight: 1.2 }}>
+                      <div style={{ fontSize: 9, color: getStepTextColor(step.done, !!step.active), marginTop: 4, textAlign: 'center', lineHeight: 1.2 }}>
                         {step.label}
                       </div>
                     </div>
@@ -202,7 +243,15 @@ export default function ApplicantDashboard() {
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 16 }}>🏦 Available Loan Products</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           {LOAN_TYPES.map((lt) => (
-            <div key={lt.name} className="card" style={{ padding: '16px', cursor: 'pointer', border: '1px solid var(--color-border-subtle)' }} onClick={() => setShowApply(true)}>
+            <div
+              key={lt.name}
+              role="button"
+              tabIndex={0}
+              className="card"
+              style={{ padding: '16px', cursor: 'pointer', border: '1px solid var(--color-border-subtle)' }}
+              onClick={() => setShowApply(true)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowApply(true); }}
+            >
               <div style={{ fontSize: 26, marginBottom: 8 }}>{lt.emoji}</div>
               <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-text-primary)', marginBottom: 4 }}>{lt.name}</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Up to {lt.max}</div>

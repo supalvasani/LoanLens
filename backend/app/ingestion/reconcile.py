@@ -15,8 +15,6 @@ from decimal import Decimal
 
 import pandas as pd
 
-from app.ingestion.column_classifier import ColumnMapping
-
 PASS_THRESHOLD = 0.98
 WARN_THRESHOLD = 0.85
 BALANCE_TOLERANCE = Decimal("0.01")
@@ -31,7 +29,7 @@ class ReconcileResult:
     mismatch_sample: list[dict] = field(default_factory=list)   # up to 5 rows for debugging
 
 
-def reconcile(df: pd.DataFrame, mapping: ColumnMapping) -> ReconcileResult:
+def reconcile(df: pd.DataFrame) -> ReconcileResult:
     """Check balance continuity on a canonically-resolved DataFrame.
 
     The DataFrame passed here must already have:

@@ -3,7 +3,7 @@
 Admin-only. All routes require role=admin in JWT.
 Every write logs old + new values to audit_log.
 """
-from typing import Any
+from typing import Annotated, Any
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -39,17 +39,16 @@ def _handle(exc: DomainException):
 
 @router.get(
     "/users",
-    response_model=list[AdminUserResponse],
     summary="List all users (admin only)",
 )
 @limiter.limit("120/minute")
 async def list_users(
     request: Request,
-    role: RoleEnum | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-    current_user: User = Depends(require_role(RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    role: Annotated[RoleEnum | None, Query(default=None)] = None,
+    limit: Annotated[int, Query(default=100, ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(default=0, ge=0)] = 0,
 ) -> list[AdminUserResponse]:
     try:
         return await AdminService(db).list_users(current_user, role=role, limit=limit, offset=offset)
@@ -59,7 +58,6 @@ async def list_users(
 
 @router.post(
     "/users",
-    response_model=AdminUserResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new user (any role)",
 )
@@ -67,8 +65,8 @@ async def list_users(
 async def create_user(
     request: Request,
     payload: AdminCreateUserRequest,
-    current_user: User = Depends(require_role(RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AdminUserResponse:
     try:
         return await AdminService(db).create_user(
@@ -84,7 +82,6 @@ async def create_user(
 
 @router.patch(
     "/users/{user_id}/role",
-    response_model=AdminUserResponse,
     summary="Change a user's role",
 )
 @limiter.limit("20/minute")
@@ -92,8 +89,8 @@ async def change_role(
     request: Request,
     user_id: UUID,
     payload: AdminChangeRoleRequest,
-    current_user: User = Depends(require_role(RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AdminUserResponse:
     try:
         return await AdminService(db).change_role(current_user, user_id, payload.role)
@@ -103,15 +100,14 @@ async def change_role(
 
 @router.patch(
     "/users/{user_id}/deactivate",
-    response_model=AdminUserResponse,
     summary="Deactivate a user account",
 )
 @limiter.limit("20/minute")
 async def deactivate_user(
     request: Request,
     user_id: UUID,
-    current_user: User = Depends(require_role(RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AdminUserResponse:
     try:
         return await AdminService(db).set_active(current_user, user_id, is_active=False)
@@ -121,15 +117,14 @@ async def deactivate_user(
 
 @router.patch(
     "/users/{user_id}/reactivate",
-    response_model=AdminUserResponse,
     summary="Reactivate a deactivated user",
 )
 @limiter.limit("20/minute")
 async def reactivate_user(
     request: Request,
     user_id: UUID,
-    current_user: User = Depends(require_role(RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AdminUserResponse:
     try:
         return await AdminService(db).set_active(current_user, user_id, is_active=True)
@@ -141,14 +136,13 @@ async def reactivate_user(
 
 @router.get(
     "/config",
-    response_model=list[AdminConfigResponse],
     summary="List all loan type configurations",
 )
 @limiter.limit("120/minute")
 async def list_configs(
     request: Request,
-    current_user: User = Depends(require_role(RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[AdminConfigResponse]:
     try:
         return await AdminService(db).list_configs(current_user)
@@ -158,7 +152,6 @@ async def list_configs(
 
 @router.patch(
     "/config/{loan_type_id}",
-    response_model=AdminConfigResponse,
     summary="Edit loan type thresholds (takes effect immediately, logged in audit_log)",
 )
 @limiter.limit("20/minute")
@@ -166,8 +159,8 @@ async def update_config(
     request: Request,
     loan_type_id: int,
     payload: AdminConfigUpdateRequest,
-    current_user: User = Depends(require_role(RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> AdminConfigResponse:
     try:
         return await AdminService(db).update_config(current_user, loan_type_id, payload)
@@ -179,19 +172,18 @@ async def update_config(
 
 @router.get(
     "/audit",
-    response_model=list[AuditLogEntryResponse],
     summary="Filterable audit log (admin only)",
 )
 @limiter.limit("60/minute")
 async def get_audit_log(
     request: Request,
-    user_id: UUID | None = Query(default=None),
-    action: str | None = Query(default=None),
-    target_type: str | None = Query(default=None),
-    limit: int = Query(default=100, ge=1, le=500),
-    offset: int = Query(default=0, ge=0),
-    current_user: User = Depends(require_role(RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user_id: Annotated[UUID | None, Query(default=None)] = None,
+    action: Annotated[str | None, Query(default=None)] = None,
+    target_type: Annotated[str | None, Query(default=None)] = None,
+    limit: Annotated[int, Query(default=100, ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(default=0, ge=0)] = 0,
 ) -> list[AuditLogEntryResponse]:
     try:
         return await AdminService(db).get_audit_log(
@@ -227,14 +219,13 @@ class ResolveReviewRequest(BaseModel):
 
 @router.get(
     "/pipeline-dashboard",
-    response_model=PipelineStatsResponse,
     summary="Get data engineering pipeline statistics, audit logs, and formats (admin only)",
 )
 @limiter.limit("30/minute")
 async def get_pipeline_dashboard(
     request: Request,
-    current_user: User = Depends(require_role(RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> PipelineStatsResponse:
     # 1. Total uploads count
     uploads_res = await db.execute(text("SELECT COUNT(*) FROM statement_uploads"))
@@ -332,6 +323,10 @@ async def get_pipeline_dashboard(
 
 @router.post(
     "/pipeline/review/{review_id}/resolve",
+    responses={
+        400: {"description": "Review queue item already resolved or missing details"},
+        404: {"description": "Review queue item not found"},
+    },
     summary="Resolve a format review queue item and optionally add to registry (admin only)",
 )
 @limiter.limit("20/minute")
@@ -339,8 +334,8 @@ async def resolve_pipeline_review(
     request: Request,
     review_id: UUID,
     payload: ResolveReviewRequest,
-    current_user: User = Depends(require_role(RoleEnum.admin)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ):
     # 1. Fetch the review queue item
     review_res = await db.execute(

@@ -27,7 +27,7 @@ interface ProfileModalProps {
   anchorRef?: React.RefObject<HTMLElement | null>;
 }
 
-export function ProfileModal({ onClose, anchorRef }: ProfileModalProps) {
+export function ProfileModal({ onClose, anchorRef }: Readonly<ProfileModalProps>) {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -257,17 +257,19 @@ export function ProfileModal({ onClose, anchorRef }: ProfileModalProps) {
   );
 }
 
+interface InfoRowProps {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  valueStyle?: React.CSSProperties;
+}
+
 function InfoRow({
   icon,
   label,
   value,
   valueStyle,
-}: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  valueStyle?: React.CSSProperties;
-}) {
+}: Readonly<InfoRowProps>) {
   return (
     <div
       style={{

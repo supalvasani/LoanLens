@@ -14,7 +14,7 @@ export default function AdminDashboard() {
             <div className="kpi-label">API Status</div>
             <div className="kpi-value" style={{ color: 'var(--ok)', fontSize: 18, display: 'flex', alignItems: 'center', gap: 8 }}>
               <span style={{ width: 10, height: 10, borderRadius: '50%', background: 'var(--ok)', display: 'inline-block' }} />
-              Online
+              <span>Online</span>
             </div>
           </div></div>
           <div className="card"><div className="kpi">

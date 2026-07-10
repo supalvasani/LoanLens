@@ -20,8 +20,9 @@ import sys
 import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Annotated
 
-from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, Response, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -252,17 +253,23 @@ def run_dbt_background():
 
 @router.post(
     "/bank-statement",
-    response_model=StatementUploadResult,
+    responses={
+        400: {"description": "Only CSV files are accepted."},
+        409: {"description": "This statement has already been uploaded."},
+        413: {"description": "File too large. Maximum size is 5 MB."},
+        422: {"description": "Unprocessable Entity - Ingestion failed."},
+    },
     status_code=status.HTTP_200_OK,
     summary="Upload bank statement CSV (applicant only)",
 )
 @limiter.limit("10/minute")
 async def upload_bank_statement(
     request: Request,
+    response: Response,
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(..., description="Bank statement CSV — any format"),
-    current_user: User = Depends(require_role(RoleEnum.applicant)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.applicant))],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: Annotated[UploadFile, File(description="Bank statement CSV — any format")] = ...
 ) -> StatementUploadResult:
     # ── 1. Basic file validation ──────────────────────────────────────────────
     if not file.filename or not file.filename.lower().endswith(".csv"):
@@ -294,16 +301,6 @@ async def upload_bank_statement(
     # ── 3. Build lookup callables ─────────────────────────────────────────────
     registry_lookup = await _build_registry_lookup(db)
 
-    async def _hash_lookup(aid: str, fhash: str) -> bool:
-        return await _file_hash_lookup(db, aid, fhash)
-
-    # Sync wrappers for the (sync) pipeline module
-    def sync_hash_lookup(aid: str, fhash: str) -> bool:
-        # The pipeline is sync; we pre-compute the hash and check it above
-        # to avoid bridging async/sync. The pipeline receives a stub that
-        # always returns False (the actual check is done below before calling).
-        return False  # placeholder — real check done at step 4
-
     # ── 4. Real file-hash duplicate check (async, before pipeline call) ───────
     fhash = compute_file_hash(raw_bytes)
     if await _file_hash_lookup(db, applicant_id, fhash):
@@ -320,7 +317,6 @@ async def upload_bank_statement(
     ingest_result = ingest_statement(
         raw_bytes=raw_bytes,
         applicant_id=applicant_id,
-        file_name=file.filename,
         # File-hash dedup already handled above; pass a no-op so the pipeline
         # doesn't re-check (avoids needing asyncio bridge inside sync code).
         file_hash_lookup=lambda aid, h: False,
@@ -407,21 +403,18 @@ async def upload_bank_statement(
             },
         )
         # 202 Accepted — rows stored, but manual review required
-        from fastapi.responses import JSONResponse
-        return JSONResponse(
-            status_code=202,
-            content=StatementUploadResult(
-                rows_inserted=inserted,
-                rows_skipped=skipped,
-                errors=[
-                    f"Statement partially reconciled ({ingest_result.match_rate:.0%}), "
-                    f"pending manual review before use."
-                ],
-                applicant_id=applicant_id,
-                reconciliation_verdict=ingest_result.verdict,
-                source_format=ingest_result.source_format,
-                confidence=ingest_result.confidence,
-            ).model_dump(),
+        response.status_code = status.HTTP_202_ACCEPTED
+        return StatementUploadResult(
+            rows_inserted=inserted,
+            rows_skipped=skipped,
+            errors=[
+                f"Statement partially reconciled ({ingest_result.match_rate:.0%}), "
+                f"pending manual review before use."
+            ],
+            applicant_id=applicant_id,
+            reconciliation_verdict=ingest_result.verdict,
+            source_format=ingest_result.source_format,
+            confidence=ingest_result.confidence,
         )
 
     await db.commit()

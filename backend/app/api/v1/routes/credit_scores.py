@@ -6,7 +6,7 @@ No applicant_id is accepted in the request body or URL.
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
@@ -106,15 +106,14 @@ async def _resolve_applicant_id(user: User, mart: MartRepository) -> str | None:
 
 @router.get(
     "/me",
-    response_model=CreditScoreResponse,
     status_code=status.HTTP_200_OK,
     summary="Get own credit score breakdown (applicant only)",
 )
 @limiter.limit("60/minute")
 async def get_my_credit_score(
     request: Request,
-    current_user: User = Depends(require_role(RoleEnum.applicant)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.applicant))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CreditScoreResponse:
     """
     Returns the mart_credit_score for the authenticated applicant.
@@ -174,15 +173,14 @@ async def get_my_credit_score(
 
 @router.get(
     "/me/trend",
-    response_model=CreditTrendResponse,
     status_code=status.HTTP_200_OK,
     summary="Get own 6-month credit score trend (applicant only)",
 )
 @limiter.limit("60/minute")
 async def get_my_credit_trend(
     request: Request,
-    current_user: User = Depends(require_role(RoleEnum.applicant)),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(require_role(RoleEnum.applicant))],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> CreditTrendResponse:
     """
     Returns the last 6 months from mart_monthly_credit_trend.

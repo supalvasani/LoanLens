@@ -138,7 +138,7 @@ interface ShellProps {
   actions?: ReactNode;
 }
 
-export function DashboardShell({ children, title, subtitle, actions }: ShellProps) {
+export function DashboardShell({ children, title, subtitle, actions }: Readonly<ShellProps>) {
   return (
     <div className="layout">
       <Sidebar />

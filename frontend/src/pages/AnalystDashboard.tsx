@@ -7,6 +7,18 @@ import { useState } from 'react';
 import { DashboardShell } from '../components/DashboardShell';
 import { useAuth } from '../hooks/useAuth';
 
+function getScoreColor(score: number): string {
+  if (score > 65) return 'var(--color-success)';
+  if (score < 45) return 'var(--color-danger)';
+  return 'var(--color-warning)';
+}
+
+function getDecidedBadgeClass(decided: string): string {
+  if (decided === 'Approved') return 'badge badge-success';
+  if (decided === 'Rejected') return 'badge badge-danger';
+  return 'badge badge-warning';
+}
+
 const STATS = [
   { icon: '📥', label: 'In My Queue',      value: '18',   trend: '+3', dir: 'warn', bg: 'rgba(99,102,241,0.15)',  color: '#818cf8' },
   { icon: '✅', label: 'Closed Today',      value: '12',   trend: '+4', dir: 'up',   bg: 'rgba(34,197,94,0.15)',   color: '#4ade80' },
@@ -119,13 +131,19 @@ export default function AnalystDashboard() {
                       <div style={{ fontSize: 12, color: 'var(--color-text-muted)', marginTop: 2 }}>{app.type} · {app.amount}</div>
                     </div>
                     <div style={{ textAlign: 'center' }}>
-                      <div style={{ fontSize: 22, fontWeight: 800, color: app.score > 65 ? 'var(--color-success)' : app.score < 45 ? 'var(--color-danger)' : 'var(--color-warning)' }}>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: getScoreColor(app.score) }}>
                         {app.score}
                       </div>
                       <div style={{ fontSize: 10, color: 'var(--color-text-muted)' }}>Score</div>
                     </div>
                   </div>
-                  {!decided ? (
+                  {decided ? (
+                    <div style={{ marginTop: 10 }}>
+                      <span className={getDecidedBadgeClass(decided)}>
+                        {decided} — recorded
+                      </span>
+                    </div>
+                  ) : (
                     <div className="flex gap-2" style={{ marginTop: 10 }}>
                       {app.score > 65 ? (
                         <>
@@ -142,12 +160,6 @@ export default function AnalystDashboard() {
                           ⬆ Must Escalate (Grey Zone)
                         </button>
                       )}
-                    </div>
-                  ) : (
-                    <div style={{ marginTop: 10 }}>
-                      <span className={decided === 'Approved' ? 'badge badge-success' : decided === 'Rejected' ? 'badge badge-danger' : 'badge badge-warning'}>
-                        {decided} — recorded
-                      </span>
                     </div>
                   )}
                 </div>
@@ -189,7 +201,7 @@ export default function AnalystDashboard() {
                   </div>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontWeight: 600, fontSize: 13, color: 'var(--color-text-primary)' }}>{d.amount}</div>
-                    <div style={{ fontSize: 12, color: d.score > 65 ? 'var(--color-success)' : d.score < 45 ? 'var(--color-danger)' : 'var(--color-warning)', fontWeight: 700 }}>
+                    <div style={{ fontSize: 12, color: getScoreColor(d.score), fontWeight: 700 }}>
                       {d.score}
                     </div>
                   </div>

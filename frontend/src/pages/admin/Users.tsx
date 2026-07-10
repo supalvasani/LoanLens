@@ -98,20 +98,20 @@ export default function AdminUsers() {
             <form onSubmit={handleCreate}>
               {createError && <div className="alert alert-error" style={{ marginBottom: 14 }}><span>⚠</span><span>{createError}</span></div>}
               <div className="form-group">
-                <label className="form-label">Full Name</label>
-                <input className="form-input" required value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Priya Sharma" />
+                <label htmlFor="user-name" className="form-label">Full Name</label>
+                <input id="user-name" className="form-input" required value={newUser.name} onChange={e => setNewUser(p => ({ ...p, name: e.target.value }))} placeholder="e.g. Priya Sharma" />
               </div>
               <div className="form-group">
-                <label className="form-label">Email</label>
-                <input className="form-input" type="email" required value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} placeholder="priya@loanlens.in" />
+                <label htmlFor="user-email" className="form-label">Email</label>
+                <input id="user-email" className="form-input" type="email" required value={newUser.email} onChange={e => setNewUser(p => ({ ...p, email: e.target.value }))} placeholder="priya@loanlens.in" />
               </div>
               <div className="form-group">
-                <label className="form-label">Password</label>
-                <input className="form-input" type="password" required minLength={8} value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} placeholder="Min 8 characters" />
+                <label htmlFor="user-password" className="form-label">Password</label>
+                <input id="user-password" className="form-input" type="password" required minLength={8} value={newUser.password} onChange={e => setNewUser(p => ({ ...p, password: e.target.value }))} placeholder="Min 8 characters" />
               </div>
               <div className="form-group">
-                <label className="form-label">Role</label>
-                <select className="form-input" value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}>
+                <label htmlFor="user-role" className="form-label">Role</label>
+                <select id="user-role" className="form-input" value={newUser.role} onChange={e => setNewUser(p => ({ ...p, role: e.target.value }))}>
                   {ROLES.map(r => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1)}</option>)}
                 </select>
               </div>
@@ -164,51 +164,72 @@ export default function AdminUsers() {
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--t3)' }}>
-                <span className="spinner" /> Loading users…
-              </td></tr>
-            ) : filtered.length === 0 ? (
-              <tr><td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--t3)' }}>No users found.</td></tr>
-            ) : filtered.map(u => (
-              <tr key={u.user_id}>
-                <td>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                    <div style={{ width: 30, height: 30, borderRadius: 4, background: 'var(--bg)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--t2)', flexShrink: 0 }}>
-                      {u.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
-                    </div>
-                    <span style={{ fontWeight: 500, fontSize: 13 }}>{u.name}</span>
-                  </div>
-                </td>
-                <td style={{ color: 'var(--t2)', fontSize: 12 }}>{u.email}</td>
-                <td>
-                  <span className="badge" style={ROLE_BADGE[u.role]}>
-                    {u.role}
-                  </span>
-                </td>
-                <td>
-                  <span className={`badge ${u.is_active ? 'badge-ok' : 'badge-bad'}`}>
-                    {u.is_active ? 'Active' : 'Inactive'}
-                  </span>
-                </td>
-                <td style={{ color: 'var(--t3)', fontSize: 12 }}>
-                  {new Date(u.created_at).toLocaleDateString('en-IN')}
-                </td>
-                <td>
-                  <button
-                    className={`btn btn-sm ${u.is_active ? 'btn-secondary' : 'btn-ghost'}`}
-                    disabled={busy === u.user_id}
-                    onClick={() => toggleActive(u)}
-                    style={{ fontSize: 11 }}
-                  >
-                    {busy === u.user_id ? <span className="spinner" /> : u.is_active ? 'Deactivate' : 'Reactivate'}
-                  </button>
-                </td>
-              </tr>
-            ))}
+            {renderTableBody()}
           </tbody>
         </table>
       </div>
     </DashboardShell>
   );
+
+  function getButtonLabel(u: AdminUserResponse) {
+    if (busy === u.user_id) return <span className="spinner" />;
+    return u.is_active ? 'Deactivate' : 'Reactivate';
+  }
+
+  function renderTableBody() {
+    if (loading) {
+      return (
+        <tr>
+          <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--t3)' }}>
+            <span className="spinner" /> Loading users…
+          </td>
+        </tr>
+      );
+    }
+    if (filtered.length === 0) {
+      return (
+        <tr>
+          <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--t3)' }}>
+            No users found.
+          </td>
+        </tr>
+      );
+    }
+    return filtered.map(u => (
+      <tr key={u.user_id}>
+        <td>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ width: 30, height: 30, borderRadius: 4, background: 'var(--bg)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 700, color: 'var(--t2)', flexShrink: 0 }}>
+              {u.name.split(' ').map(w => w[0]).join('').toUpperCase().slice(0, 2)}
+            </div>
+            <span style={{ fontWeight: 500, fontSize: 13 }}>{u.name}</span>
+          </div>
+        </td>
+        <td style={{ color: 'var(--t2)', fontSize: 12 }}>{u.email}</td>
+        <td>
+          <span className="badge" style={ROLE_BADGE[u.role]}>
+            {u.role}
+          </span>
+        </td>
+        <td>
+          <span className={`badge ${u.is_active ? 'badge-ok' : 'badge-bad'}`}>
+            {u.is_active ? 'Active' : 'Inactive'}
+          </span>
+        </td>
+        <td style={{ color: 'var(--t3)', fontSize: 12 }}>
+          {new Date(u.created_at).toLocaleDateString('en-IN')}
+        </td>
+        <td>
+          <button
+            className={`btn btn-sm ${u.is_active ? 'btn-secondary' : 'btn-ghost'}`}
+            disabled={busy === u.user_id}
+            onClick={() => toggleActive(u)}
+            style={{ fontSize: 11 }}
+          >
+            {getButtonLabel(u)}
+          </button>
+        </td>
+      </tr>
+    ));
+  }
 }

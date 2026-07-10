@@ -52,7 +52,6 @@ class DecisionService:
     async def _escalation_pre_check(
         self,
         application_id: UUID,
-        deciding_user: User,
     ) -> tuple[float | None, bool, bool]:
         """Run escalation checks for ANALYST role.
 
@@ -91,17 +90,7 @@ class DecisionService:
 
     # ── Analyst: Close (Approve or Reject) ────────────────────────────────────
 
-    async def analyst_close(
-        self,
-        application_id: UUID,
-        analyst: User,
-        payload: AnalystDecisionRequest,
-    ) -> DecisionResponse:
-        """Analyst closes an application — approve (score>65) or reject (score<45).
-
-        Raises EscalationRequiredError for grey-zone, fraud, or above-threshold.
-        Raises InsufficientAuthorityError if decision == escalated (use analyst_escalate).
-        """
+    async def _validate_analyst_decision(self, application, analyst: User, payload: AnalystDecisionRequest) -> None:
         if analyst.role != RoleEnum.analyst:
             raise InsufficientPermissionsException()
 
@@ -109,10 +98,6 @@ class DecisionService:
             raise InsufficientAuthorityError(
                 "Use the escalate action — not close — to escalate an application"
             )
-
-        application = await self.app_repo.get_by_id(application_id)
-        if application is None:
-            raise ResourceNotFoundException("Application", str(application_id))
 
         if application.status not in (
             ApplicationStatusEnum.pending,
@@ -123,7 +108,7 @@ class DecisionService:
             )
 
         score, has_fraud, is_above_threshold = await self._escalation_pre_check(
-            application_id, analyst
+            application.application_id
         )
 
         # ── Escalation gate ──
@@ -150,6 +135,26 @@ class DecisionService:
                 raise InsufficientAuthorityError(
                     f"Score {score:.1f} is not below 45; cannot reject"
                 )
+
+    async def analyst_close(
+        self,
+        application_id: UUID,
+        analyst: User,
+        payload: AnalystDecisionRequest,
+    ) -> DecisionResponse:
+        """Analyst closes an application — approve (score>65) or reject (score<45).
+
+        Raises EscalationRequiredError for grey-zone, fraud, or above-threshold.
+        Raises InsufficientAuthorityError if decision == escalated (use analyst_escalate).
+        """
+        application = await self.app_repo.get_by_id(application_id)
+        if application is None:
+            raise ResourceNotFoundException("Application", str(application_id))
+
+        await self._validate_analyst_decision(application, analyst, payload)
+
+        # Retrieve score again for logging below
+        score, _, _ = await self._escalation_pre_check(application_id)
 
         new_status = (
             ApplicationStatusEnum.approved

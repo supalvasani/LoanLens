@@ -3,8 +3,9 @@
 Dispatches to self-mode (applicant) or analyst-mode (staff) based on JWT role.
 Rate limited to 10/minute per spec.
 """
+from typing import Annotated
+
 from fastapi import APIRouter, Depends, Request, status
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -34,7 +35,6 @@ class ChatResponse(BaseModel):
 
 @router.post(
     "",
-    response_model=ChatResponse,
     status_code=status.HTTP_200_OK,
     summary="Ask LoanBot a question about credit report and eligibility",
 )
@@ -42,8 +42,8 @@ class ChatResponse(BaseModel):
 async def chat(
     request: Request,
     payload: ChatRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db),
+    current_user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
 ) -> ChatResponse:
     """
     - **Applicant role**: applicant_id is always taken from JWT (self mode).
@@ -68,9 +68,10 @@ async def chat(
         raise
     except RuntimeError as exc:
         logger.error("chatbot_llm_error", extra={"error": str(exc)})
-        return JSONResponse(
+        from fastapi import HTTPException
+        raise HTTPException(
             status_code=503,
-            content={"detail": "LoanBot is temporarily unavailable. Please try again shortly."},
+            detail="LoanBot is temporarily unavailable. Please try again shortly.",
         )
 
     from app.enums import RoleEnum

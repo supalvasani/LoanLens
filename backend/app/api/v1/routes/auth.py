@@ -1,3 +1,4 @@
+from typing import Annotated
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Request, status
@@ -14,9 +15,9 @@ from app.services.auth_service import AuthService
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
-@router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/register", status_code=status.HTTP_201_CREATED)
 @limiter.limit("5/minute")
-async def register(request: Request, payload: RegisterRequest, db: AsyncSession = Depends(get_db)) -> UserResponse:
+async def register(request: Request, payload: RegisterRequest, db: Annotated[AsyncSession, Depends(get_db)]) -> UserResponse:
     try:
         return await AuthService(db).register(payload)
     except DomainException as exc:
@@ -24,9 +25,9 @@ async def register(request: Request, payload: RegisterRequest, db: AsyncSession 
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
-@router.post("/login", response_model=TokenResponse)
+@router.post("/login")
 @limiter.limit("10/minute")
-async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+async def login(request: Request, payload: LoginRequest, db: Annotated[AsyncSession, Depends(get_db)]) -> TokenResponse:
     try:
         return await AuthService(db).login(payload)
     except DomainException as exc:
@@ -34,8 +35,8 @@ async def login(request: Request, payload: LoginRequest, db: AsyncSession = Depe
         raise HTTPException(status_code=exc.status_code, detail=exc.message) from exc
 
 
-@router.post("/refresh", response_model=TokenResponse)
-async def refresh_token(request: Request, payload: RefreshTokenRequest, db: AsyncSession = Depends(get_db)) -> TokenResponse:
+@router.post("/refresh", responses={401: {"description": "User is inactive or no longer exists"}})
+async def refresh_token(request: Request, payload: RefreshTokenRequest, db: Annotated[AsyncSession, Depends(get_db)]) -> TokenResponse:
     claims = decode_token(payload.refresh_token, refresh=True)
     user = await UserRepository(db).get_by_id(UUID(claims["user_id"]))
     if user is None or not user.is_active:

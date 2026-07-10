@@ -114,10 +114,86 @@ def _normalise_txn_type(raw: str) -> str | None:
 
 # ── Canonical resolution ──────────────────────────────────────────────────────
 
+def _resolve_single_canonical_row(
+    row,
+    mapping: ColumnMapping,
+    source_format: str,
+    fhash: str,
+) -> dict | None:
+    # ── date ──────────────────────────────────────────────────────────────
+    txn_date = None
+    if mapping.txn_date_col and pd.notna(row.get(mapping.txn_date_col)):
+        txn_date = _parse_date(str(row[mapping.txn_date_col]))
+    if txn_date is None:
+        return None
+
+    # ── amount + txn_type ─────────────────────────────────────────────────
+    amount: Decimal | None = None
+    txn_type: str | None = None
+
+    if mapping.amount_pattern == "flagged":
+        raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
+        amount = _parse_amount(raw_amt)
+        raw_type = str(row.get(mapping.txn_type_col, "") or "")
+        txn_type = _normalise_txn_type(raw_type)
+
+    elif mapping.amount_pattern == "split":
+        debit_col, credit_col = mapping.amount_cols[0], mapping.amount_cols[1]
+        raw_debit = str(row.get(debit_col, "") or "").strip().replace(",", "")
+        raw_credit = str(row.get(credit_col, "") or "").strip().replace(",", "")
+        debit_val = _parse_amount(raw_debit)
+        credit_val = _parse_amount(raw_credit)
+        # Skip rows with no value in either column (e.g. header summary rows)
+        if (debit_val is None or debit_val == Decimal("0")) and \
+           (credit_val is None or credit_val == Decimal("0")):
+            return {}
+        if credit_val and credit_val > 0:
+            amount, txn_type = credit_val, "credit"
+        else:
+            amount, txn_type = debit_val, "debit"
+
+    elif mapping.amount_pattern == "signed":
+        raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
+        clean = raw_amt.strip().replace(",", "")
+        try:
+            signed = Decimal(clean)
+            amount = abs(signed)
+            txn_type = "credit" if signed >= 0 else "debit"
+        except InvalidOperation:
+            pass
+
+    if amount is None or txn_type is None:
+        return None
+
+    # ── description (coalesce left-to-right) ──────────────────────────────
+    description = ""
+    for desc_col in mapping.description_cols:
+        val = str(row.get(desc_col, "") or "").strip()
+        if val:
+            description = val
+            break
+    if not description:
+        description = "—"
+
+    # ── balance_after ─────────────────────────────────────────────────────
+    balance_after: Decimal | None = None
+    if mapping.balance_col and pd.notna(row.get(mapping.balance_col)):
+        balance_after = _parse_amount(str(row[mapping.balance_col]))
+
+    return {
+        "txn_date": txn_date,
+        "amount": amount,
+        "txn_type": txn_type,
+        "description": description,
+        "balance_after": balance_after,
+        "source_format": source_format,
+        "source_file_hash": fhash,
+    }
+
+
 def _resolve_canonical_rows(
     df: pd.DataFrame,
     mapping: ColumnMapping,
-    applicant_id: str,
     source_format: str,
     fhash: str,
 ) -> tuple[list[dict], int]:
@@ -129,80 +205,13 @@ def _resolve_canonical_rows(
     unparseable = 0
 
     for idx, row in df.iterrows():
-        # ── date ──────────────────────────────────────────────────────────────
-        txn_date = None
-        if mapping.txn_date_col and pd.notna(row.get(mapping.txn_date_col)):
-            txn_date = _parse_date(str(row[mapping.txn_date_col]))
-        if txn_date is None:
+        res = _resolve_single_canonical_row(row, mapping, source_format, fhash)
+        if res is None:
             unparseable += 1
+        elif res == {}:
             continue
-
-        # ── amount + txn_type ─────────────────────────────────────────────────
-        amount: Decimal | None = None
-        txn_type: str | None = None
-
-        if mapping.amount_pattern == "flagged":
-            raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
-            amount = _parse_amount(raw_amt)
-            raw_type = str(row.get(mapping.txn_type_col, "") or "")
-            txn_type = _normalise_txn_type(raw_type)
-
-        elif mapping.amount_pattern == "split":
-            debit_col, credit_col = mapping.amount_cols[0], mapping.amount_cols[1]
-            raw_debit = str(row.get(debit_col, "") or "").strip().replace(",", "")
-            raw_credit = str(row.get(credit_col, "") or "").strip().replace(",", "")
-            debit_val = _parse_amount(raw_debit)
-            credit_val = _parse_amount(raw_credit)
-            # Skip rows with no value in either column (e.g. header summary rows)
-            if (debit_val is None or debit_val == Decimal("0")) and \
-               (credit_val is None or credit_val == Decimal("0")):
-                continue
-            if credit_val and credit_val > 0:
-                amount, txn_type = credit_val, "credit"
-            else:
-                amount, txn_type = debit_val, "debit"
-
-        elif mapping.amount_pattern == "signed":
-            raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
-            clean = raw_amt.strip().replace(",", "")
-            try:
-                signed = Decimal(clean)
-                amount = abs(signed)
-                txn_type = "credit" if signed >= 0 else "debit"
-            except InvalidOperation:
-                pass
-
-        if amount is None or txn_type is None:
-            unparseable += 1
-            continue
-
-        # ── description (coalesce left-to-right) ──────────────────────────────
-        description = ""
-        for desc_col in mapping.description_cols:
-            val = str(row.get(desc_col, "") or "").strip()
-            if val:
-                description = val
-                break
-        if not description:
-            description = "—"
-
-        # ── balance_after ─────────────────────────────────────────────────────
-        balance_after: Decimal | None = None
-        if mapping.balance_col and pd.notna(row.get(mapping.balance_col)):
-            balance_after = _parse_amount(str(row[mapping.balance_col]))
-
-        canonical.append(
-            {
-                "txn_date": txn_date,
-                "amount": amount,
-                "txn_type": txn_type,
-                "description": description,
-                "balance_after": balance_after,
-                "source_format": source_format,
-                "source_file_hash": fhash,
-                # raw_id and raw_applicant_id added in attach_raw_ids / caller
-            }
-        )
+        else:
+            canonical.append(res)
 
     return canonical, unparseable
 
@@ -213,12 +222,41 @@ def _headers_to_key(headers: list[str]) -> frozenset[str]:
     return frozenset(h.strip().lower() for h in headers)
 
 
+def _decode_bytes(raw_bytes: bytes, fhash: str) -> tuple[str | None, IngestResult | None]:
+    try:
+        return raw_bytes.decode("utf-8-sig"), None
+    except UnicodeDecodeError:
+        try:
+            return raw_bytes.decode("latin-1"), None
+        except UnicodeDecodeError:
+            return None, IngestResult(
+                status=STATUS_NOT_A_BANK_STATEMENT,
+                file_hash=fhash,
+                error_detail="File encoding could not be determined (not UTF-8 or Latin-1).",
+            )
+
+
+def _parse_dataframe(text_content: str, fhash: str) -> tuple[pd.DataFrame | None, IngestResult | None]:
+    raw_lines = text_content.splitlines()
+    header_row_idx = detect_header_row(raw_lines, max_scan=30)
+    trimmed = "\n".join(raw_lines[header_row_idx:])
+    try:
+        df_raw = pd.read_csv(io.StringIO(trimmed), dtype=str, keep_default_na=False)
+        df_raw.columns = [str(c).strip() for c in df_raw.columns]
+        return df_raw, None
+    except Exception as exc:
+        return None, IngestResult(
+            status=STATUS_NOT_A_BANK_STATEMENT,
+            file_hash=fhash,
+            error_detail=f"CSV parse error: {exc}",
+        )
+
+
 # ── Main pipeline ─────────────────────────────────────────────────────────────
 
 def ingest_statement(
     raw_bytes: bytes,
     applicant_id: str,
-    file_name: str,
     *,
     file_hash_lookup: Callable[[str, str], bool],
     registry_lookup: Callable[[frozenset[str]], dict | None],
@@ -231,8 +269,6 @@ def ingest_statement(
         Raw file bytes exactly as received (used for SHA-256 + parsing).
     applicant_id:
         UUID string of the raw_applicants row for this upload.
-    file_name:
-        Original filename (stored for debugging / review queue).
     file_hash_lookup:
         Callable(applicant_id, sha256_hex) → bool.
         Returns True if this file has already been ingested for this applicant.
@@ -252,35 +288,15 @@ def ingest_statement(
         return IngestResult(status=STATUS_DUPLICATE_FILE, file_hash=fhash)
 
     # ── 2. Decode ─────────────────────────────────────────────────────────────
-    try:
-        text_content = raw_bytes.decode("utf-8-sig")
-    except UnicodeDecodeError:
-        try:
-            text_content = raw_bytes.decode("latin-1")
-        except UnicodeDecodeError:
-            return IngestResult(
-                status=STATUS_NOT_A_BANK_STATEMENT,
-                file_hash=fhash,
-                error_detail="File encoding could not be determined (not UTF-8 or Latin-1).",
-            )
+    text_content, err_result = _decode_bytes(raw_bytes, fhash)
+    if err_result:
+        return err_result
 
-    # ── 3. Detect header row (handle preamble) ────────────────────────────────
-    raw_lines = text_content.splitlines()
-    header_row_idx = detect_header_row(raw_lines, max_scan=30)
+    # ── 3. Parse DataFrame ────────────────────────────────────────────────────
+    df_raw, err_result = _parse_dataframe(text_content, fhash)
+    if err_result:
+        return err_result
 
-    # Re-parse from the detected header row
-    trimmed = "\n".join(raw_lines[header_row_idx:])
-    try:
-        df_raw = pd.read_csv(io.StringIO(trimmed), dtype=str, keep_default_na=False)
-    except Exception as exc:
-        return IngestResult(
-            status=STATUS_NOT_A_BANK_STATEMENT,
-            file_hash=fhash,
-            error_detail=f"CSV parse error: {exc}",
-        )
-
-    # Strip whitespace from column names
-    df_raw.columns = [str(c).strip() for c in df_raw.columns]
     detected_headers = list(df_raw.columns)
 
     # ── 4. Minimum row check ──────────────────────────────────────────────────
@@ -346,7 +362,7 @@ def ingest_statement(
     # ── 9. Resolve canonical rows ─────────────────────────────────────────────
     source_format = f"{source_prefix}:{mapping.amount_pattern}"
     canonical_rows, unparseable = _resolve_canonical_rows(
-        df_raw, mapping, applicant_id, source_format, fhash
+        df_raw, mapping, source_format, fhash
     )
 
     total_attempted = len(df_raw)
@@ -374,7 +390,7 @@ def ingest_statement(
 
     # ── 10. Balance reconciliation ────────────────────────────────────────────
     canonical_df = pd.DataFrame(canonical_rows)
-    reconcile_result = reconcile(canonical_df, mapping)
+    reconcile_result = reconcile(canonical_df)
 
     if reconcile_result.verdict == "fail":
         return IngestResult(
