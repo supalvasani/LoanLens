@@ -15,6 +15,9 @@ down_revision = "20260630_0003"
 branch_labels = None
 depends_on = None
 
+RANDOM_UUID_TEXT = sa.text("gen_random_uuid()")
+NOW_TEXT = sa.text("now()")
+
 
 def upgrade() -> None:
     # ── Drop dependent staging view ───────────────────────────────────────────
@@ -87,7 +90,7 @@ def upgrade() -> None:
             "upload_id",
             postgresql.UUID(as_uuid=True),
             primary_key=True,
-            server_default=sa.text("gen_random_uuid()"),
+            server_default=RANDOM_UUID_TEXT,
         ),
         sa.Column("applicant_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("file_hash", sa.String(64), nullable=False),
@@ -102,7 +105,7 @@ def upgrade() -> None:
             "uploaded_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=NOW_TEXT,
         ),
         sa.ForeignKeyConstraint(["applicant_id"], ["raw_applicants.raw_applicant_id"]),
         sa.UniqueConstraint("applicant_id", "file_hash", name="uq_statement_uploads_applicant_file"),
@@ -117,7 +120,7 @@ def upgrade() -> None:
             "format_id",
             postgresql.UUID(as_uuid=True),
             primary_key=True,
-            server_default=sa.text("gen_random_uuid()"),
+            server_default=RANDOM_UUID_TEXT,
         ),
         sa.Column("bank_name", sa.String(100), nullable=True),
         sa.Column("match_headers", postgresql.ARRAY(sa.Text()), nullable=False),
@@ -132,7 +135,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=NOW_TEXT,
         ),
         sa.CheckConstraint(
             "confidence_source IN ('manual', 'heuristic_promoted')",
@@ -147,7 +150,7 @@ def upgrade() -> None:
             "review_id",
             postgresql.UUID(as_uuid=True),
             primary_key=True,
-            server_default=sa.text("gen_random_uuid()"),
+            server_default=RANDOM_UUID_TEXT,
         ),
         sa.Column("file_name", sa.Text(), nullable=True),
         sa.Column("detected_headers", postgresql.ARRAY(sa.Text()), nullable=False),
@@ -158,7 +161,7 @@ def upgrade() -> None:
             "created_at",
             sa.DateTime(timezone=True),
             nullable=False,
-            server_default=sa.text("now()"),
+            server_default=NOW_TEXT,
         ),
     )
     op.create_index("ix_format_review_queue_resolved", "format_review_queue", ["resolved"])

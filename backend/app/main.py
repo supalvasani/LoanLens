@@ -67,6 +67,9 @@ async def health() -> JSONResponse:
     return JSONResponse({"status": "ok", "version": "0.1.0"})
 
 
+API_V1_PREFIX = "/api/v1"
+
+
 # ── Routers ────────────────────────────────────────────────────────────────────
 from app.api.v1.routes.admin import router as admin_router  # noqa: E402
 from app.api.v1.routes.analyst import router as analyst_router  # noqa: E402
@@ -80,14 +83,14 @@ from app.api.v1.routes.manager import router as manager_router  # noqa: E402
 from app.api.v1.routes.upload import router as upload_router  # noqa: E402
 from app.api.v1.routes.users import router as users_router  # noqa: E402
 
-app.include_router(auth_router,          prefix="/api/v1")
-app.include_router(users_router,         prefix="/api/v1")
-app.include_router(applications_router,  prefix="/api/v1")
-app.include_router(decisions_router,     prefix="/api/v1")
-app.include_router(admin_router,         prefix="/api/v1")
-app.include_router(chatbot_router,       prefix="/api/v1")
-app.include_router(upload_router,        prefix="/api/v1")
-app.include_router(credit_scores_router, prefix="/api/v1")
-app.include_router(eligibility_router,   prefix="/api/v1")
-app.include_router(analyst_router,       prefix="/api/v1")
-app.include_router(manager_router,       prefix="/api/v1")
+app.include_router(auth_router,          prefix=API_V1_PREFIX)
+app.include_router(users_router,         prefix=API_V1_PREFIX)
+app.include_router(applications_router,  prefix=API_V1_PREFIX)
+app.include_router(decisions_router,     prefix=API_V1_PREFIX)
+app.include_router(admin_router,         prefix=API_V1_PREFIX)
+app.include_router(chatbot_router,       prefix=API_V1_PREFIX)
+app.include_router(upload_router,        prefix=API_V1_PREFIX)
+app.include_router(credit_scores_router, prefix=API_V1_PREFIX)
+app.include_router(eligibility_router,   prefix=API_V1_PREFIX)
+app.include_router(analyst_router,       prefix=API_V1_PREFIX)
+app.include_router(manager_router,       prefix=API_V1_PREFIX)

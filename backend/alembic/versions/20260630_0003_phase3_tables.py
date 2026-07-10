@@ -9,6 +9,9 @@ down_revision = "20260629_0002"
 branch_labels = None
 depends_on = None
 
+USERS_USER_ID_FK = "users.user_id"
+NOW_TEXT = sa.text("now()")
+
 
 def upgrade() -> None:
     op.add_column("raw_applicants", sa.Column("user_id", postgresql.UUID(as_uuid=True), nullable=True))
@@ -32,20 +35,20 @@ def upgrade() -> None:
         sa.Column("approve_threshold", sa.Integer(), nullable=False),
         sa.Column("review_lower", sa.Integer(), nullable=False),
         sa.Column("review_upper", sa.Integer(), nullable=False),
-        sa.Column("updated_by", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.user_id"), nullable=True),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_by", postgresql.UUID(as_uuid=True), sa.ForeignKey(USERS_USER_ID_FK), nullable=True),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=NOW_TEXT),
     )
 
     op.create_table(
         "audit_log",
         sa.Column("log_id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.user_id"), nullable=False),
+        sa.Column("user_id", postgresql.UUID(as_uuid=True), sa.ForeignKey(USERS_USER_ID_FK), nullable=False),
         sa.Column("action", sa.String(length=128), nullable=False),
         sa.Column("target_type", sa.String(length=64), nullable=False),
         sa.Column("target_id", sa.String(length=64), nullable=False),
         sa.Column("old_value", postgresql.JSONB(), nullable=True),
         sa.Column("new_value", postgresql.JSONB(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=NOW_TEXT),
     )
     op.create_index("ix_audit_log_user_id", "audit_log", ["user_id"])
     op.create_index("ix_audit_log_created_at", "audit_log", ["created_at"])
@@ -54,11 +57,11 @@ def upgrade() -> None:
         "decisions",
         sa.Column("decision_id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("application_id", postgresql.UUID(as_uuid=True), sa.ForeignKey("raw_loan_applications.application_id"), nullable=False),
-        sa.Column("decided_by", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.user_id"), nullable=False),
+        sa.Column("decided_by", postgresql.UUID(as_uuid=True), sa.ForeignKey(USERS_USER_ID_FK), nullable=False),
         sa.Column("decision", decision_enum, nullable=False),
         sa.Column("notes", sa.Text(), nullable=True),
-        sa.Column("escalated_to", postgresql.UUID(as_uuid=True), sa.ForeignKey("users.user_id"), nullable=True),
-        sa.Column("decided_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("escalated_to", postgresql.UUID(as_uuid=True), sa.ForeignKey(USERS_USER_ID_FK), nullable=True),
+        sa.Column("decided_at", sa.DateTime(timezone=True), nullable=False, server_default=NOW_TEXT),
     )
     op.create_index("ix_decisions_application_id", "decisions", ["application_id"])
 

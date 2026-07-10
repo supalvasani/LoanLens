@@ -9,6 +9,8 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 from app.enums import ApplicationStatusEnum, DecisionEnum, LoanTypeEnum
 
+USERS_USER_ID_FK = "users.user_id"
+
 
 class LoanTypeConfig(Base):
     __tablename__ = "loan_type_config"
@@ -25,7 +27,7 @@ class LoanTypeConfig(Base):
     approve_threshold: Mapped[int] = mapped_column(Integer, nullable=False)
     review_lower: Mapped[int] = mapped_column(Integer, nullable=False)
     review_upper: Mapped[int] = mapped_column(Integer, nullable=False)
-    updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
+    updated_by: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey(USERS_USER_ID_FK), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
@@ -33,7 +35,7 @@ class AuditLog(Base):
     __tablename__ = "audit_log"
 
     log_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey(USERS_USER_ID_FK), nullable=False)
     action: Mapped[str] = mapped_column(String(128), nullable=False)
     target_type: Mapped[str] = mapped_column(String(64), nullable=False)
     target_id: Mapped[str] = mapped_column(String(64), nullable=False)
@@ -47,13 +49,13 @@ class Decision(Base):
 
     decision_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     application_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("raw_loan_applications.application_id"), nullable=False)
-    decided_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
+    decided_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey(USERS_USER_ID_FK), nullable=False)
     decision: Mapped[DecisionEnum] = mapped_column(
         Enum(DecisionEnum, name="decision_enum", native_enum=True, create_constraint=False),
         nullable=False,
     )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
-    escalated_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
+    escalated_to: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey(USERS_USER_ID_FK), nullable=True)
     decided_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
@@ -67,7 +69,7 @@ class RawApplicant(Base):
     phone: Mapped[str] = mapped_column(String(15), nullable=False)
     city: Mapped[str] = mapped_column(String(80), nullable=False)
     monthly_income_declared: Mapped[Decimal] = mapped_column(Numeric(14, 2), nullable=False)
-    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=True)
+    user_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey(USERS_USER_ID_FK), nullable=True)
     ingested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
@@ -75,7 +77,7 @@ class RawLoanApplication(Base):
     __tablename__ = "raw_loan_applications"
 
     application_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.user_id"), nullable=False)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey(USERS_USER_ID_FK), nullable=False)
     loan_type: Mapped[LoanTypeEnum] = mapped_column(
         Enum(LoanTypeEnum, name="loan_type_enum", native_enum=True, create_constraint=False),
         nullable=False,

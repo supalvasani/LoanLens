@@ -9,6 +9,8 @@ down_revision = "20260623_0001"
 branch_labels = None
 depends_on = None
 
+NOW_TEXT = sa.text("now()")
+
 
 def _create_enum(name: str, values: list[str]) -> postgresql.ENUM:
     enum_type = postgresql.ENUM(*values, name=name, create_type=False)
@@ -43,7 +45,7 @@ def upgrade() -> None:
         sa.Column("phone", sa.String(length=15), nullable=False),
         sa.Column("city", sa.String(length=80), nullable=False),
         sa.Column("monthly_income_declared", sa.Numeric(14, 2), nullable=False),
-        sa.Column("ingested_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("ingested_at", sa.DateTime(timezone=True), nullable=False, server_default=NOW_TEXT),
         sa.UniqueConstraint("applicant_ref"),
     )
     op.create_index("ix_raw_applicants_applicant_ref", "raw_applicants", ["applicant_ref"], unique=True)
@@ -58,7 +60,7 @@ def upgrade() -> None:
         sa.Column("txn_type", txn_type, nullable=False),
         sa.Column("description", sa.String(length=255), nullable=False),
         sa.Column("balance_after", sa.Numeric(14, 2), nullable=False),
-        sa.Column("ingested_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("ingested_at", sa.DateTime(timezone=True), nullable=False, server_default=NOW_TEXT),
         sa.ForeignKeyConstraint(["applicant_id"], ["raw_applicants.raw_applicant_id"]),
     )
     op.create_index("ix_raw_transactions_applicant_id", "raw_transactions", ["applicant_id"])
@@ -73,7 +75,7 @@ def upgrade() -> None:
         sa.Column("amount_requested", sa.Numeric(14, 2), nullable=False),
         sa.Column("purpose", sa.Text(), nullable=False),
         sa.Column("status", app_status, nullable=False, server_default="pending"),
-        sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=False, server_default=NOW_TEXT),
         sa.ForeignKeyConstraint(["user_id"], ["users.user_id"]),
     )
     op.create_index("ix_raw_loan_applications_user_id", "raw_loan_applications", ["user_id"])
@@ -85,7 +87,7 @@ def upgrade() -> None:
         sa.Column("source_file", sa.String(length=512), nullable=False),
         sa.Column("record_type", sa.String(length=32), nullable=False),
         sa.Column("rows_loaded", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("ingested_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("ingested_at", sa.DateTime(timezone=True), nullable=False, server_default=NOW_TEXT),
         sa.UniqueConstraint("source_file"),
     )
 
@@ -97,7 +99,7 @@ def upgrade() -> None:
         sa.Column("effective_from", sa.Date(), nullable=False),
         sa.Column("effective_to", sa.Date(), nullable=True),
         sa.Column("source", sa.String(length=64), nullable=False, server_default="RBI"),
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=NOW_TEXT),
     )
     op.create_index("ix_stg_rbi_rates_effective_from", "stg_rbi_rates", ["effective_from"])
 
