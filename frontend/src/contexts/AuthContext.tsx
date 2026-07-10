@@ -12,7 +12,6 @@ import {
 } from 'react';
 import { jwtDecode } from 'jwt-decode';
 import { authService } from '../services/authService';
-import { sanitizeToken } from '../utils/sanitize';
 import type { AuthState, LoginRequest, TokenPayload } from '../types/auth';
 
 // ── Types ────────────────────────────────────────────────────────────────────
@@ -58,8 +57,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (storedRefresh && !isTokenExpired(storedRefresh)) {
           try {
             const tokens = await authService.refreshToken(storedRefresh);
-            localStorage.setItem('access_token', sanitizeToken(tokens.access_token));
-            localStorage.setItem('refresh_token', sanitizeToken(tokens.refresh_token));
+            localStorage.setItem('access_token', tokens.access_token.replace(/[^A-Za-z0-9-_=.]/g, ''));
+            localStorage.setItem('refresh_token', tokens.refresh_token.replace(/[^A-Za-z0-9-_=.]/g, ''));
             const user = await authService.getMe();
             setState({
               user,
@@ -97,8 +96,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (payload: LoginRequest) => {
     const tokens = await authService.login(payload);
-    localStorage.setItem('access_token', sanitizeToken(tokens.access_token));
-    localStorage.setItem('refresh_token', sanitizeToken(tokens.refresh_token));
+    localStorage.setItem('access_token', tokens.access_token.replace(/[^A-Za-z0-9-_=.]/g, ''));
+    localStorage.setItem('refresh_token', tokens.refresh_token.replace(/[^A-Za-z0-9-_=.]/g, ''));
     const user = await authService.getMe();
     setState({
       user,

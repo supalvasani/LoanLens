@@ -4,7 +4,6 @@
 // ──────────────────────────────────────────────────────────────────────────────
 
 import axios, { type AxiosInstance, type InternalAxiosRequestConfig } from 'axios';
-import { sanitizeToken } from '../utils/sanitize';
 
 const BASE_URL = 'http://localhost:8000/api/v1';
 
@@ -70,8 +69,8 @@ api.interceptors.response.use(
         });
         const newAccessToken: string = res.data.access_token;
         const newRefreshToken: string = res.data.refresh_token;
-        localStorage.setItem('access_token', sanitizeToken(newAccessToken));
-        localStorage.setItem('refresh_token', sanitizeToken(newRefreshToken));
+        localStorage.setItem('access_token', newAccessToken.replace(/[^A-Za-z0-9-_=.]/g, ''));
+        localStorage.setItem('refresh_token', newRefreshToken.replace(/[^A-Za-z0-9-_=.]/g, ''));
         api.defaults.headers.common['Authorization'] = `Bearer ${newAccessToken}`;
         processQueue(null, newAccessToken);
         original.headers.Authorization = `Bearer ${newAccessToken}`;
