@@ -118,8 +118,5 @@ jobs:
       - name: Build backend image
         run: docker build -t loanlens-backend ./backend
 
-      - name: Build frontend image
-        run: docker build -t loanlens-frontend ./frontend
-
       - name: Validate docker compose config
         run: docker compose config

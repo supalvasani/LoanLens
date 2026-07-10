@@ -13,7 +13,6 @@ but never breaks ingestion.
 from __future__ import annotations
 
 import io
-import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
