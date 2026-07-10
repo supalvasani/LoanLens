@@ -3,18 +3,18 @@
 from __future__ import annotations
 
 import subprocess
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
+from airflow.operators.python import PythonOperator
+from loanlens_common import write_pipeline_audit
 
 from airflow import DAG
-from airflow.operators.python import PythonOperator
-
-from loanlens_common import write_pipeline_audit
 
 DBT_PROJECT_DIR = "/opt/airflow/dbt/loanlens"
 
 
 def run_all_marts() -> None:
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     rows_processed = 0
     failures = 0
     status = "success"

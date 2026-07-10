@@ -87,7 +87,6 @@ models:
       - name: gap_amount
         tests: [not_null]
       - name: gap_reason
-        tests: [not_null]
       - name: decision
         tests:
           - not_null

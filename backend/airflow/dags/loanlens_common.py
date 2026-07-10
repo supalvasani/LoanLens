@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import psycopg2
 
@@ -28,7 +28,7 @@ def write_pipeline_audit(
     started_at: datetime,
     status: str,
 ) -> None:
-    ended_at = datetime.now(timezone.utc)
+    ended_at = datetime.now(UTC)
     with psycopg2.connect(db_dsn()) as conn:
         with conn.cursor() as cur:
             cur.execute(

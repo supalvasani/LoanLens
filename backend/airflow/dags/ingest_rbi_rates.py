@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 
 import psycopg2
-from airflow import DAG
 from airflow.operators.python import PythonOperator
-
 from loanlens_common import db_dsn, write_pipeline_audit
+
+from airflow import DAG
 
 RBI_RATES = [
     ("repo_rate", 6.50),
@@ -24,7 +24,7 @@ RBI_RATES = [
 
 
 def refresh_rbi_rates() -> None:
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     rows_processed = 0
     failures = 0
     status = "success"

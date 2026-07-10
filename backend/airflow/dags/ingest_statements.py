@@ -10,14 +10,15 @@ from __future__ import annotations
 import json
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 
 import psycopg2
-from airflow import DAG
 from airflow.operators.python import PythonOperator
 from airflow.operators.trigger_dagrun import TriggerDagRunOperator
+
+from airflow import DAG
 
 # Make the app package importable from within Airflow workers
 _BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -25,12 +26,13 @@ if str(_BACKEND_ROOT) not in sys.path:
     sys.path.insert(0, str(_BACKEND_ROOT))
 
 from loanlens_common import db_dsn, write_pipeline_audit  # noqa: E402
+
+from app.ingestion.dedup import file_hash as compute_file_hash  # noqa: E402
 from app.ingestion.pipeline import (  # noqa: E402
-    ingest_statement,
     STATUS_OK,
     STATUS_RECONCILIATION_WARN,
+    ingest_statement,
 )
-from app.ingestion.dedup import file_hash as compute_file_hash  # noqa: E402
 
 LANDING_ROOT = Path("/opt/airflow/data/landing")
 APPLICANTS_DIR = LANDING_ROOT / "applicants"
@@ -62,7 +64,7 @@ def _registry_lookup_sync(cur, header_key: frozenset) -> dict | None:
 
 
 def ingest_landing_files() -> None:
-    started_at = datetime.now(timezone.utc)
+    started_at = datetime.now(UTC)
     rows_processed = 0
     failures = 0
     status = "success"
@@ -83,7 +85,6 @@ def ingest_landing_files() -> None:
                         ON CONFLICT (applicant_ref) DO NOTHING
                     """
                     import csv as _csv
-                    import io as _io
                     for csv_path in sorted(APPLICANTS_DIR.glob("*.csv")):
                         source_file = str(csv_path)
                         if _already_ingested(cur, source_file):
