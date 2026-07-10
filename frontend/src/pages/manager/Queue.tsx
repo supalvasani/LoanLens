@@ -25,7 +25,13 @@ export default function ManagerQueue() {
   };
 
   useEffect(() => {
-    fetchQueue();
+    let active = true;
+    Promise.resolve().then(() => {
+      if (active) {
+        fetchQueue();
+      }
+    });
+    return () => { active = false; };
   }, []);
 
   return (

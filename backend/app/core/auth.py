@@ -1,5 +1,5 @@
 from collections.abc import Callable
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
 
@@ -31,7 +31,7 @@ def verify_password(password: str, password_hash: str) -> bool:
 
 
 def _create_token(user: User, *, secret: str, expires_delta: timedelta, token_type: str) -> str:
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     payload = {"user_id": str(user.user_id), "role": user.role.value, "type": token_type, "iat": now, "exp": now + expires_delta}
     return jwt.encode(payload, secret, algorithm=settings.JWT_ALGORITHM)
 

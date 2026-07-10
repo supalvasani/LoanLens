@@ -19,8 +19,8 @@ from app.schemas.loan import (
     AdminOverrideRequest,
     AnalystDecisionRequest,
     DecisionResponse,
-    ManagerDecisionRequest,
     ManagerDecisionDTO,
+    ManagerDecisionRequest,
 )
 from app.services.decision_service import DecisionService
 

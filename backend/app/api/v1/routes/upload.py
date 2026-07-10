@@ -14,36 +14,33 @@ Canonical rows are bulk-inserted into raw_transactions with ON CONFLICT DO NOTHI
 """
 
 import json
-import uuid
 import os
-import sys
 import subprocess
-from datetime import datetime, timezone
+import sys
+import uuid
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import require_role
 from app.core.database import get_db
-from app.core.rate_limit import limiter
 from app.core.logger import logger
+from app.core.rate_limit import limiter
 from app.enums import RoleEnum
-from app.models.user import User
+from app.ingestion.dedup import file_hash as compute_file_hash
 from app.ingestion.pipeline import (
-    ingest_statement,
-    STATUS_OK,
-    STATUS_DUPLICATE_FILE,
-    STATUS_TOO_FEW_ROWS,
-    STATUS_NOT_A_BANK_STATEMENT,
     STATUS_LOW_CONFIDENCE,
+    STATUS_NOT_A_BANK_STATEMENT,
     STATUS_RECONCILIATION_FAILED,
     STATUS_RECONCILIATION_WARN,
+    STATUS_TOO_FEW_ROWS,
+    ingest_statement,
 )
-from app.ingestion.dedup import file_hash as compute_file_hash
+from app.models.user import User
 
 router = APIRouter(prefix="/upload", tags=["Upload"])
 
@@ -54,10 +51,10 @@ class StatementUploadResult(BaseModel):
     rows_inserted: int
     rows_skipped: int
     errors: list[str]
-    applicant_id: Optional[str]
-    reconciliation_verdict: Optional[str] = None
-    source_format: Optional[str] = None
-    confidence: Optional[float] = None
+    applicant_id: str | None
+    reconciliation_verdict: str | None = None
+    source_format: str | None = None
+    confidence: float | None = None
 
 
 # ── Registry lookup (injected into pipeline, async DB wrapper) ────────────────
@@ -69,7 +66,7 @@ async def _build_registry_lookup(db: AsyncSession):
     )
     entries = result.mappings().all()
 
-    def _lookup(header_key: frozenset) -> Optional[dict]:
+    def _lookup(header_key: frozenset) -> dict | None:
         for entry in entries:
             registry_key = frozenset(h.strip().lower() for h in entry["match_headers"])
             if registry_key == header_key:
@@ -134,7 +131,7 @@ async def _bulk_insert_rows(
     """Insert canonical rows, return (inserted, skipped)."""
     inserted = 0
     skipped = 0
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
 
     for row in rows:
         result = await db.execute(
@@ -184,7 +181,7 @@ async def _insert_upload_record(
             "reconciliation_match_rate": result.match_rate,
             "date_range_start": date_start,
             "date_range_end": date_end,
-            "uploaded_at": datetime.now(timezone.utc),
+            "uploaded_at": datetime.now(UTC),
         },
     )
 
@@ -211,7 +208,7 @@ async def _insert_review_queue(
                 ]
             ),
             "reason": reason,
-            "created_at": datetime.now(timezone.utc),
+            "created_at": datetime.now(UTC),
         },
     )
 
@@ -302,7 +299,6 @@ async def upload_bank_statement(
 
     # Sync wrappers for the (sync) pipeline module
     def sync_hash_lookup(aid: str, fhash: str) -> bool:
-        import asyncio
         # The pipeline is sync; we pre-compute the hash and check it above
         # to avoid bridging async/sync. The pipeline receives a stub that
         # always returns False (the actual check is done below before calling).
@@ -375,8 +371,7 @@ async def upload_bank_statement(
         )
 
     if ingest_result.status == STATUS_RECONCILIATION_FAILED:
-        mismatches = (ingest_result.rows_checked if hasattr(ingest_result, "rows_checked") else "?")
-        checked = mismatches  # captured in error_detail
+        (ingest_result.rows_checked if hasattr(ingest_result, "rows_checked") else "?")
         logger.error(
             "bank_statement_reconciliation_failed",
             extra={
@@ -390,7 +385,7 @@ async def upload_bank_statement(
         raise HTTPException(
             status_code=422,
             detail=ingest_result.error_detail
-            or f"Balance didn't reconcile — mapping is likely wrong.",
+            or "Balance didn't reconcile — mapping is likely wrong.",
         )
 
     # STATUS_OK or STATUS_RECONCILIATION_WARN

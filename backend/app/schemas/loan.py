@@ -10,7 +10,6 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator  # field_vali
 
 from app.enums import ApplicationStatusEnum, DecisionEnum, LoanTypeEnum
 
-
 # ── Loan Application ─────────────────────────────────────────────────────────
 
 class LoanApplicationRequest(BaseModel):
@@ -93,7 +92,7 @@ class ApplicationWithMartDataResponse(BaseModel):
     underwriter_report: UnderwriterReportData | None = None
     monthly_trend: list[MonthlyTrendPoint] = Field(default_factory=list)
     risk_tier: str | None = None
-    decisions: list["DecisionResponse"] = Field(default_factory=list)
+    decisions: list[DecisionResponse] = Field(default_factory=list)
 
 
 # ── Analyst Queue (enriched flat row) ────────────────────────────────────────

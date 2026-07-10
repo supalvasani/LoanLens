@@ -1,6 +1,5 @@
 import api from './api';
 import type {
-  LoanApplication,
   ApplicationFull,
   LoanType,
 } from '../types/loan';
@@ -83,7 +82,7 @@ export const managerService = {
   async submitDecision(
     id: string,
     payload: { decision: 'approved' | 'rejected'; notes: string }
-  ): Promise<any> {
+  ): Promise<unknown> {
     const res = await api.post(`/decisions/${id}`, payload);
     return res.data;
   },

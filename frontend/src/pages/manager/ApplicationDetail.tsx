@@ -86,17 +86,27 @@ export default function ManagerApplicationDetail() {
 
   useEffect(() => {
     if (!id) return;
-    setLoading(true);
-    managerService.getApplication(id)
-      .then((data) => {
-        setDetail(data);
-        setError(null);
-      })
-      .catch((err) => {
-        console.error(err);
-        setError('Failed to load application details or you do not have permission.');
-      })
-      .finally(() => setLoading(false));
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      setLoading(true);
+      managerService.getApplication(id)
+        .then((data) => {
+          if (!active) return;
+          setDetail(data);
+          setError(null);
+        })
+        .catch((err) => {
+          if (!active) return;
+          console.error(err);
+          setError('Failed to load application details or you do not have permission.');
+        })
+        .finally(() => {
+          if (!active) return;
+          setLoading(false);
+        });
+    });
+    return () => { active = false; };
   }, [id]);
 
   async function handleDecision(decision: 'approved' | 'rejected') {
@@ -489,7 +499,7 @@ export default function ManagerApplicationDetail() {
         <div className="card" style={{ border: '1px solid var(--border)', boxShadow: 'var(--sh-md)' }}>
           <SectionHeader>Bank Manager Action — Final Decision</SectionHeader>
           
-          {app.status !== 'escalated' ? (
+          {!canDecide ? (
             <div className="alert alert-success">
               <span>✓</span>
               <span>This application is already resolved with status <strong>{app.status.toUpperCase()}</strong>.</span>

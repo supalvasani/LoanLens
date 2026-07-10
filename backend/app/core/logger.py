@@ -1,8 +1,11 @@
 import logging
-from pathlib import Path
 from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
+
 from pythonjsonlogger import jsonlogger
+
 from app.core.config import settings
+
 
 def setup_logger() -> logging.Logger:
     """

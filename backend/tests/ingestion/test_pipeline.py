@@ -4,25 +4,18 @@ Tests every status code, both source paths (registry fast path vs heuristic),
 duplicate detection at both file and row level, and the review-queue trigger
 conditions.
 """
-import io
 import uuid
-from decimal import Decimal
 
-import pandas as pd
-import pytest
-
+from app.ingestion.dedup import file_hash
 from app.ingestion.pipeline import (
-    ingest_statement,
-    STATUS_OK,
     STATUS_DUPLICATE_FILE,
-    STATUS_TOO_FEW_ROWS,
     STATUS_NOT_A_BANK_STATEMENT,
-    STATUS_LOW_CONFIDENCE,
+    STATUS_OK,
     STATUS_RECONCILIATION_FAILED,
     STATUS_RECONCILIATION_WARN,
+    STATUS_TOO_FEW_ROWS,
+    ingest_statement,
 )
-from app.ingestion.dedup import file_hash
-
 
 # ── Test CSV factories ────────────────────────────────────────────────────────
 

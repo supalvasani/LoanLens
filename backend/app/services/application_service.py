@@ -5,10 +5,10 @@ Repository layer handles all DB queries.
 """
 from __future__ import annotations
 
-from decimal import Decimal
-from datetime import datetime, timezone
-from typing import Any
 import uuid
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Any
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -17,9 +17,9 @@ from app.core.logger import logger
 from app.enums import ApplicationStatusEnum, LoanTypeEnum, RoleEnum
 from app.exceptions.domain import InsufficientPermissionsException, ResourceNotFoundException
 from app.ingestion.pipeline import (
-    ingest_statement,
     STATUS_OK,
     STATUS_RECONCILIATION_WARN,
+    ingest_statement,
 )
 from app.models.loan import RawLoanApplication
 from app.models.user import User
@@ -105,13 +105,8 @@ class ApplicationService:
         purpose: str,
         file: Any = None,
     ) -> LoanApplicationResponse:
-        import uuid
-        from decimal import Decimal, InvalidOperation
-        from datetime import date, datetime, timezone
-        import csv
-        import io
-        from app.exceptions.domain import DomainException
-        from sqlalchemy import text
+        from decimal import Decimal
+
         from app.models.loan import RawApplicant
 
         if current_user.role != RoleEnum.applicant:
@@ -179,7 +174,7 @@ class ApplicationService:
                              :source_file_hash, :ingested_at)
                         ON CONFLICT (raw_id) DO NOTHING
                     """)
-                    now = datetime.now(timezone.utc)
+                    now = datetime.now(UTC)
                     for row in (ingest_result.rows or []):
                         try:
                             await self.session.execute(
@@ -278,7 +273,7 @@ class ApplicationService:
         async def _false() -> bool:
             return False
 
-        async def _enrich(app: "RawLoanApplication") -> AnalystQueueItem:
+        async def _enrich(app: RawLoanApplication) -> AnalystQueueItem:
             applicant_id = await self.mart_repo.get_applicant_id_for_user(app.user_id)
 
             # Fetch mart data in parallel for this application

@@ -4,7 +4,7 @@ All business logic lives in ApplicationService — routes are HTTP-only.
 Every route is protected by @require_role(RoleEnum.analyst).
 Request latency is logged by the global middleware in main.py.
 """
-from typing import Literal, Optional
+from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, Query, Request, status
@@ -40,11 +40,11 @@ def _http(exc: DomainException) -> None:
 @limiter.limit(_QUEUE_LIMIT)
 async def list_analyst_applications(
     request: Request,
-    score_min: Optional[float] = Query(default=None, ge=0, le=100, description="Min credit score"),
-    score_max: Optional[float] = Query(default=None, ge=0, le=100, description="Max credit score"),
-    risk_segment: Optional[str] = Query(default=None, description="low | medium | high"),
-    loan_type: Optional[LoanTypeEnum] = Query(default=None),
-    recommendation: Optional[str] = Query(default=None, description="approve | review | reject"),
+    score_min: float | None = Query(default=None, ge=0, le=100, description="Min credit score"),
+    score_max: float | None = Query(default=None, ge=0, le=100, description="Max credit score"),
+    risk_segment: str | None = Query(default=None, description="low | medium | high"),
+    loan_type: LoanTypeEnum | None = Query(default=None),
+    recommendation: str | None = Query(default=None, description="approve | review | reject"),
     sort_by: Literal["score", "submitted_at", "amount_requested"] = Query(default="submitted_at"),
     sort_dir: Literal["asc", "desc"] = Query(default="desc"),
     limit: int = Query(default=50, ge=1, le=200),

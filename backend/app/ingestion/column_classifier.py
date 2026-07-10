@@ -9,10 +9,8 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Optional
 
 import pandas as pd
-
 
 # ── Canonical role keyword sets ───────────────────────────────────────────────
 
@@ -71,14 +69,14 @@ _CR_VARIANTS = re.compile(r"^(cr|c|credit)$", re.IGNORECASE)
 class ColumnMapping:
     """Resolved column roles for a single bank statement DataFrame."""
 
-    txn_date_col: Optional[str] = None
+    txn_date_col: str | None = None
     # For 'split': [debit_col, credit_col]
     # For 'flagged': [amount_col]
     # For 'signed': [amount_col]
     amount_cols: list[str] = field(default_factory=list)
-    txn_type_col: Optional[str] = None        # present only for 'flagged' pattern
+    txn_type_col: str | None = None        # present only for 'flagged' pattern
     description_cols: list[str] = field(default_factory=list)  # coalesced left-to-right
-    balance_col: Optional[str] = None
+    balance_col: str | None = None
     amount_pattern: str = "signed"            # 'flagged' | 'split' | 'signed'
     confidence: float = 0.0                   # min of all role scores used
 
@@ -215,7 +213,7 @@ def _best_col(
     candidates: list[str],
     role: str,
     min_score: float = 0.25,
-) -> tuple[Optional[str], float]:
+) -> tuple[str | None, float]:
     """Return the highest-scoring candidate column and its score."""
     best_col, best_score = None, 0.0
     for col in candidates:

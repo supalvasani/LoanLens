@@ -6,12 +6,12 @@ Covers:
 - Null balance_after rows excluded but not penalised
 - Mismatch sample returned on fail
 """
-import pytest
-import pandas as pd
 from decimal import Decimal
 
-from app.ingestion.reconcile import reconcile
+import pandas as pd
+
 from app.ingestion.column_classifier import ColumnMapping
+from app.ingestion.reconcile import reconcile
 
 
 def _mapping() -> ColumnMapping:

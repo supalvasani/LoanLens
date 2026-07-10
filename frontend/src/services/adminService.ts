@@ -1,5 +1,5 @@
 import api from './api';
-import type { AdminUserResponse, AdminConfigResponse, AuditLogEntry } from '../types/admin';
+import type { AdminUserResponse, AdminConfigResponse, AuditLogEntry, PipelineDashboardResponse } from '../types/admin';
 
 export const adminService = {
   // ── Users ──────────────────────────────────────────────────────────────────
@@ -55,6 +55,26 @@ export const adminService = {
     limit?: number; offset?: number;
   }): Promise<AuditLogEntry[]> {
     const res = await api.get('/admin/audit', { params });
+    return res.data;
+  },
+
+  // ── Ingestion Pipeline ─────────────────────────────────────────────────────
+  async getPipelineDashboard(): Promise<PipelineDashboardResponse> {
+    const res = await api.get('/admin/pipeline-dashboard');
+    return res.data;
+  },
+
+  async resolvePipelineReview(
+    reviewId: string,
+    payload: {
+      resolved?: boolean;
+      promote?: boolean;
+      bank_name?: string;
+      column_map?: Record<string, string | string[]>;
+      amount_pattern?: string;
+    }
+  ): Promise<unknown> {
+    const res = await api.post(`/admin/pipeline/review/${reviewId}/resolve`, payload);
     return res.data;
   },
 };

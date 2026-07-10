@@ -1,6 +1,9 @@
 import asyncio
-from app.core.database import SessionLocal
+
 from sqlalchemy import text
+
+from app.core.database import SessionLocal
+
 
 async def f():
     async with SessionLocal() as s:

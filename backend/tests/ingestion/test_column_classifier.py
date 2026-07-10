@@ -10,15 +10,12 @@ Covers every guardrail documented in the spec:
 - Preamble detection (skip count)
 - Clean file (no preamble, skip count = 0)
 """
-import pytest
 import pandas as pd
 
 from app.ingestion.column_classifier import (
     classify_columns,
     detect_header_row,
-    ColumnMapping,
 )
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -12,10 +12,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Optional
 
 import pandas as pd
-import numpy as np
 
 from app.ingestion.column_classifier import ColumnMapping
 

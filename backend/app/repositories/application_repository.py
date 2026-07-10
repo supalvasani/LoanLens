@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from decimal import Decimal
 
-from sqlalchemy import and_, select, update, func
+from sqlalchemy import and_, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.enums import ApplicationStatusEnum, LoanTypeEnum, RoleEnum

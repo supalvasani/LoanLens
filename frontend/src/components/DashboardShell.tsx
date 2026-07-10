@@ -1,5 +1,5 @@
 import { type ReactNode, useRef, useState } from 'react';
-import { useNavigate, Link, useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import type { Role } from '../types/auth';
 import { ProfileModal } from './ProfileModal';

@@ -2,18 +2,15 @@ from __future__ import annotations
 
 import asyncio
 from datetime import datetime
-from decimal import Decimal
 from typing import Any
 from uuid import UUID
 
-from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logger import logger
 from app.enums import ApplicationStatusEnum, DecisionEnum, LoanTypeEnum, RoleEnum
 from app.exceptions.domain import (
     InsufficientPermissionsException,
-    InsufficientAuthorityError,
     ResourceNotFoundException,
 )
 from app.models.user import User
@@ -25,19 +22,19 @@ from app.repositories.mart_repository import MartRepository
 from app.repositories.user_repository import UserRepository
 from app.schemas.loan import (
     ConfigUpdateDTO,
+    CreditScoreData,
+    DecisionResponse,
+    FraudFlagData,
+    LoanApplicationResponse,
+    LoanEligibilityData,
     LoanTypeConfigResponse,
     ManagerApplicationResponse,
     ManagerQueueItem,
-    PortfolioDTO,
-    ScoreBucketCount,
-    RiskBreakdown,
-    CreditScoreData,
-    FraudFlagData,
-    LoanEligibilityData,
-    UnderwriterReportData,
     MonthlyTrendPoint,
-    DecisionResponse,
-    LoanApplicationResponse,
+    PortfolioDTO,
+    RiskBreakdown,
+    ScoreBucketCount,
+    UnderwriterReportData,
 )
 
 

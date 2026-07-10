@@ -1,17 +1,18 @@
 import enum
 
-class RoleEnum(str, enum.Enum):
+
+class RoleEnum(enum.StrEnum):
     admin = "admin"
     manager = "manager"
     analyst = "analyst"
     applicant = "applicant"
 
-class DecisionEnum(str, enum.Enum):
+class DecisionEnum(enum.StrEnum):
     approved = "approved"
     rejected = "rejected"
     escalated = "escalated"
 
-class LoanTypeEnum(str, enum.Enum):
+class LoanTypeEnum(enum.StrEnum):
     home_loan = "home_loan"
     personal_loan = "personal_loan"
     auto_loan = "auto_loan"
@@ -19,16 +20,16 @@ class LoanTypeEnum(str, enum.Enum):
     two_wheeler_loan = "two_wheeler_loan"
     business_loan = "business_loan"
 
-class RiskTierEnum(str, enum.Enum):
+class RiskTierEnum(enum.StrEnum):
     low = "low"
     medium = "medium"
     high = "high"
 
-class TxnTypeEnum(str, enum.Enum):
+class TxnTypeEnum(enum.StrEnum):
     credit = "credit"
     debit = "debit"
 
-class ApplicationStatusEnum(str, enum.Enum):
+class ApplicationStatusEnum(enum.StrEnum):
     pending = "pending"
     under_review = "under_review"
     approved = "approved"

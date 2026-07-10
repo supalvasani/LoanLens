@@ -16,10 +16,12 @@ const PortalChatbot     = lazy(() => import('./pages/portal/Chatbot'));
 const PortalStatements  = lazy(() => import('./pages/portal/Statements'));
 
 // ── Admin ────────────────────────────────────────────────────────────────────
-import AdminDashboard   from './pages/AdminDashboard';
-import AdminUsers       from './pages/admin/Users';
-import AdminConfig      from './pages/admin/Config';
-import AdminAuditLog    from './pages/admin/AuditLog';
+import AdminDashboard    from './pages/AdminDashboard';
+import AdminUsers        from './pages/admin/Users';
+import AdminConfig       from './pages/admin/Config';
+import AdminAuditLog     from './pages/admin/AuditLog';
+import AdminApplications from './pages/admin/Applications';
+import AdminPipeline     from './pages/admin/Pipeline';
 
 // ── Manager ──────────────────────────────────────────────────────────────────
 import ManagerDashboard from './pages/manager/Dashboard';
@@ -74,6 +76,8 @@ export default function App() {
           {/* ── Admin ── */}
           <Route path="/admin/dashboard"   element={<R roles={['admin']}><AdminDashboard /></R>} />
           <Route path="/admin/users"       element={<R roles={['admin']}><AdminUsers /></R>} />
+          <Route path="/admin/applications" element={<R roles={['admin']}><AdminApplications /></R>} />
+          <Route path="/admin/pipeline"     element={<R roles={['admin']}><AdminPipeline /></R>} />
           <Route path="/admin/config"      element={<R roles={['admin']}><AdminConfig /></R>} />
           <Route path="/admin/audit"       element={<R roles={['admin']}><AdminAuditLog /></R>} />
           {/* Fallback for unbuilt admin sub-pages */}

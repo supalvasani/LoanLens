@@ -32,3 +32,40 @@ export interface AuditLogEntry {
   new_value: Record<string, unknown> | null;
   created_at: string;
 }
+
+export interface AuditRun {
+  run_id: string;
+  dag_name: string;
+  rows_processed: number;
+  failures: number;
+  started_at: string;
+  ended_at: string;
+  status: string;
+}
+
+export interface RegistryEntry {
+  format_id: string;
+  bank_name: string | null;
+  match_headers: string[];
+  amount_pattern: string;
+  confidence_source: string;
+  created_at: string;
+}
+
+export interface ReviewQueueItem {
+  review_id: string;
+  file_name: string | null;
+  detected_headers: string[];
+  sample_rows: Record<string, unknown>[];
+  reason: string;
+  created_at: string;
+}
+
+export interface PipelineDashboardResponse {
+  total_uploads: number;
+  total_registry: number;
+  pending_reviews: number;
+  audit_runs: AuditRun[];
+  registry_entries: RegistryEntry[];
+  pending_items: ReviewQueueItem[];
+}

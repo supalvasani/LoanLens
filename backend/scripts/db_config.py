@@ -1,7 +1,9 @@
 """Shared DB connection config for scripts — uses same .env as the app."""
 from __future__ import annotations
+
 import os
 from pathlib import Path
+
 from dotenv import load_dotenv
 
 # Load backend .env

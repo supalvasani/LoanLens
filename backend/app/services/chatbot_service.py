@@ -20,7 +20,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.clients.llm_client import call_llm
 from app.core.logger import logger
 from app.enums import RoleEnum
-from app.exceptions.domain import InsufficientPermissionsException, ResourceNotFoundException
 from app.models.user import User
 from app.repositories.mart_repository import MartRepository
 

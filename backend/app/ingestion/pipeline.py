@@ -14,10 +14,10 @@ from __future__ import annotations
 
 import io
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
-from typing import Any, Callable, Optional
 
 import pandas as pd
 
@@ -41,9 +41,9 @@ MAX_UNPARSE_RATE = 0.10   # >10% core fields unparseable → reject
 @dataclass
 class IngestResult:
     status: str                             # see STATUS_* constants below
-    rows: Optional[list[dict]] = None       # canonical rows, ready for DB insert
-    verdict: Optional[str] = None           # reconciliation verdict
-    match_rate: Optional[float] = None
+    rows: list[dict] | None = None       # canonical rows, ready for DB insert
+    verdict: str | None = None           # reconciliation verdict
+    match_rate: float | None = None
     mismatch_sample: list[dict] = field(default_factory=list)
     source_format: str = "unknown"          # 'registry:flagged' | 'heuristic:split' etc.
     file_hash: str = ""
@@ -72,7 +72,7 @@ _DATE_FMTS = (
 )
 
 
-def _parse_date(val: str) -> Optional[date]:
+def _parse_date(val: str) -> date | None:
     val = val.strip()
     if not val:
         return None
@@ -88,7 +88,7 @@ def _parse_date(val: str) -> Optional[date]:
     return None
 
 
-def _parse_amount(val: str) -> Optional[Decimal]:
+def _parse_amount(val: str) -> Decimal | None:
     """Parse a numeric string, stripping commas and parenthetical suffixes."""
     val = val.strip()
     if not val:
@@ -103,7 +103,7 @@ def _parse_amount(val: str) -> Optional[Decimal]:
         return None
 
 
-def _normalise_txn_type(raw: str) -> Optional[str]:
+def _normalise_txn_type(raw: str) -> str | None:
     """Map Dr/Cr variants to canonical 'debit'/'credit'."""
     v = raw.strip().lower()
     if v in ("dr", "db", "d", "debit"):
@@ -139,8 +139,8 @@ def _resolve_canonical_rows(
             continue
 
         # ── amount + txn_type ─────────────────────────────────────────────────
-        amount: Optional[Decimal] = None
-        txn_type: Optional[str] = None
+        amount: Decimal | None = None
+        txn_type: str | None = None
 
         if mapping.amount_pattern == "flagged":
             raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
@@ -188,7 +188,7 @@ def _resolve_canonical_rows(
             description = "—"
 
         # ── balance_after ─────────────────────────────────────────────────────
-        balance_after: Optional[Decimal] = None
+        balance_after: Decimal | None = None
         if mapping.balance_col and pd.notna(row.get(mapping.balance_col)):
             balance_after = _parse_amount(str(row[mapping.balance_col]))
 
@@ -222,7 +222,7 @@ def ingest_statement(
     file_name: str,
     *,
     file_hash_lookup: Callable[[str, str], bool],
-    registry_lookup: Callable[[frozenset[str]], Optional[dict]],
+    registry_lookup: Callable[[frozenset[str]], dict | None],
 ) -> IngestResult:
     """Full ingestion pipeline for a single bank statement file.
 
@@ -299,7 +299,7 @@ def ingest_statement(
     header_key = _headers_to_key(detected_headers)
     registry_entry = registry_lookup(header_key)
 
-    mapping: Optional[ColumnMapping] = None
+    mapping: ColumnMapping | None = None
     source_prefix = "heuristic"
 
     if registry_entry is not None:

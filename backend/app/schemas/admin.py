@@ -11,7 +11,6 @@ from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.enums import RoleEnum
 
-
 # ── User management ──────────────────────────────────────────────────────────
 
 class AdminCreateUserRequest(BaseModel):

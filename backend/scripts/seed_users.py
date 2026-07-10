@@ -60,8 +60,9 @@ async def seed() -> None:
             )
             created += 1
         # Ensure Amit Applicant has a RawApplicant profile
-        from sqlalchemy import text
         from decimal import Decimal
+
+        from sqlalchemy import text
         amit_uid = uuid.UUID("a0000000-0000-4000-8000-000000000004")
         res = await session.execute(text("SELECT 1 FROM raw_applicants WHERE user_id = :uid"), {"uid": str(amit_uid)})
         if not res.scalar():

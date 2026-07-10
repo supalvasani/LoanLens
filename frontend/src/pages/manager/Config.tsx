@@ -33,7 +33,13 @@ export default function ManagerConfig() {
   };
 
   useEffect(() => {
-    fetchConfigs();
+    let active = true;
+    Promise.resolve().then(() => {
+      if (active) {
+        fetchConfigs();
+      }
+    });
+    return () => { active = false; };
   }, []);
 
   const handleStartEdit = (config: LoanTypeConfig) => {
@@ -87,9 +93,10 @@ export default function ManagerConfig() {
 
       // Clear success alert after 4 seconds
       setTimeout(() => setSuccessMsg(null), 4000);
-    } catch (err: any) {
+    } catch (err) {
       console.error(err);
-      alert(err.response?.data?.detail || 'Failed to update config.');
+      const errorDetail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      alert(errorDetail || 'Failed to update config.');
     }
   };
 

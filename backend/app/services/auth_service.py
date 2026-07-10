@@ -21,6 +21,7 @@ class AuthService:
         # Auto-create RawApplicant profile linked to this user
         import uuid
         from decimal import Decimal
+
         from app.models.loan import RawApplicant
         applicant_ref = f"APP_{str(user.user_id)[:8].upper()}"
         self.session.add(

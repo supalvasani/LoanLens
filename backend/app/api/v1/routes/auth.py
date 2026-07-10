@@ -5,11 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import create_access_token, create_refresh_token, decode_token
 from app.core.database import get_db
+from app.core.rate_limit import limiter
 from app.exceptions.domain import DomainException
-from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.user import LoginRequest, RefreshTokenRequest, RegisterRequest, TokenResponse, UserResponse
-from app.core.rate_limit import limiter
 from app.services.auth_service import AuthService
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])

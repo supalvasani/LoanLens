@@ -4,20 +4,23 @@ All business logic is in application_service.py.
 Routes are HTTP-only: parse request, call service, return response.
 Every route logs method + path + status + latency via main.py middleware.
 """
-from typing import Optional
 
-from fastapi import APIRouter, Depends, Query, Request, status
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+
+from fastapi import APIRouter, Depends, File, Form, Query, Request, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.auth import get_current_user, require_role
 from app.core.database import get_db
 from app.core.rate_limit import limiter
-from app.enums import ApplicationStatusEnum, RoleEnum
+from app.enums import ApplicationStatusEnum, LoanTypeEnum, RoleEnum
 from app.exceptions.domain import DomainException
 from app.models.user import User
 from app.schemas.loan import (
     ApplicationWithMartDataResponse,
-    LoanApplicationRequest,
     LoanApplicationResponse,
 )
 from app.services.application_service import ApplicationService
@@ -25,12 +28,6 @@ from app.services.application_service import ApplicationService
 router = APIRouter(prefix="/applications", tags=["Applications"])
 
 
-from decimal import Decimal
-from fastapi import APIRouter, Depends, Query, Request, status, File, Form, UploadFile
-from pydantic import BaseModel
-from uuid import UUID
-from datetime import datetime
-from app.enums import LoanTypeEnum
 
 class MyLoanApplicationResponse(BaseModel):
     application_id: UUID
@@ -52,10 +49,10 @@ class MyLoanApplicationResponse(BaseModel):
 @limiter.limit("5/minute")
 async def apply_for_loan(
     request: Request,
-    loan_type: Optional[LoanTypeEnum] = Form(None),
-    amount_requested: Optional[Decimal] = Form(None),
-    purpose: Optional[str] = Form(None),
-    bank_statement_csv: Optional[UploadFile] = File(None),
+    loan_type: LoanTypeEnum | None = Form(None),
+    amount_requested: Decimal | None = Form(None),
+    purpose: str | None = Form(None),
+    bank_statement_csv: UploadFile | None = File(None),
     current_user: User = Depends(require_role(RoleEnum.applicant)),
     db: AsyncSession = Depends(get_db),
 ) -> LoanApplicationResponse:
@@ -119,7 +116,7 @@ async def get_my_applications_route(
 @limiter.limit("60/minute")
 async def list_applications(
     request: Request,
-    status_filter: Optional[ApplicationStatusEnum] = Query(default=None, alias="status"),
+    status_filter: ApplicationStatusEnum | None = Query(default=None, alias="status"),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     current_user: User = Depends(get_current_user),
