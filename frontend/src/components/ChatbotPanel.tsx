@@ -63,8 +63,9 @@ export function ChatbotPanel({ mode, placeholder }: ChatbotProps) {
       {mode === 'analyst' && (
         <div style={{ padding: '12px 0 8px', borderBottom: '1px solid var(--border)', marginBottom: 12 }}>
           <div className="form-group" style={{ marginBottom: 0 }}>
-            <label className="form-label">Applicant ID (UUID from raw_applicants)</label>
+            <label htmlFor="chatbot-applicant-id" className="form-label">Applicant ID (UUID from raw_applicants)</label>
             <input
+              id="chatbot-applicant-id"
               type="text"
               className="form-input"
               placeholder="e.g. 550e8400-e29b-41d4-a716-446655440000"
@@ -116,7 +117,7 @@ export function ChatbotPanel({ mode, placeholder }: ChatbotProps) {
               gap: 8,
             }}>
               <span className="spinner" style={{ width: 12, height: 12 }} />
-              LoanBot is thinking…
+              <span>LoanBot is thinking…</span>
             </div>
           </div>
         )}

@@ -59,7 +59,7 @@ export default function AdminAudit() {
     l.target_id.includes(search)
   );
 
-  const uniqueActions = [...new Set(logs.map(l => l.action))].sort();
+  const uniqueActions = [...new Set(logs.map(l => l.action))].sort((a, b) => a.localeCompare(b));
 
   return (
     <DashboardShell

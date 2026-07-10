@@ -72,7 +72,7 @@ export default function AnalystDashboard() {
           <div key={s.label} className="stat-card">
             <div className="flex items-center justify-between">
               <div className="stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
-              {s.trend && <span className={`stat-trend ${s.dir === 'up' ? 'up' : 'down'}`}>{s.dir === 'up' ? '↑' : '↑'} {s.trend}</span>}
+              {s.trend && <span className={`stat-trend ${s.dir === 'up' ? 'up' : 'down'}`}>{s.dir === 'up' ? '↑' : '↓'} {s.trend}</span>}
             </div>
             <div className="stat-value">{s.value}</div>
             <div className="stat-label">{s.label}</div>

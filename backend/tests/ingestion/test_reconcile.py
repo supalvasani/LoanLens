@@ -45,7 +45,7 @@ def test_pass_verdict_perfect_reconciliation():
     ]
     result = reconcile(_make_df(rows), _mapping())
     assert result.verdict == "pass"
-    assert result.match_rate == 1.0
+    assert abs(result.match_rate - 1.0) < 1e-9
 
 
 def test_warn_verdict_partial_reconciliation():

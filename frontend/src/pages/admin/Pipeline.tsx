@@ -346,8 +346,9 @@ export default function AdminPipeline() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Bank / Config Name</label>
+                <label htmlFor="promote-name" className="form-label">Bank / Config Name</label>
                 <input
+                  id="promote-name"
                   type="text"
                   className="input"
                   placeholder="e.g. HDFC Statement, Axis Bank, Custom CSV"
@@ -357,8 +358,9 @@ export default function AdminPipeline() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Amount Layout Pattern</label>
+                <label htmlFor="promote-pattern" className="form-label">Amount Layout Pattern</label>
                 <select 
+                  id="promote-pattern"
                   className="input" 
                   value={promotePattern} 
                   onChange={(e) => setPromotePattern(e.target.value as 'signed' | 'split' | 'flagged')}
@@ -371,18 +373,18 @@ export default function AdminPipeline() {
 
               <div className="grid-2" style={{ gap: 14 }}>
                 <div className="form-group">
-                  <label className="form-label">Txn Date Column</label>
-                  <select className="input" value={dateCol} onChange={(e) => setDateCol(e.target.value)}>
+                  <label htmlFor="date-col" className="form-label">Txn Date Column</label>
+                  <select id="date-col" className="input" value={dateCol} onChange={(e) => setDateCol(e.target.value)}>
                     <option value="">-- Select Column --</option>
                     {selectedReview.detected_headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
                 </div>
                 
                 <div className="form-group">
-                  <label className="form-label">
+                  <label htmlFor="amount-col-1" className="form-label">
                     {promotePattern === 'split' ? 'Debit Amount Column' : 'Amount Column'}
                   </label>
-                  <select className="input" value={amountCol1} onChange={(e) => setAmountCol1(e.target.value)}>
+                  <select id="amount-col-1" className="input" value={amountCol1} onChange={(e) => setAmountCol1(e.target.value)}>
                     <option value="">-- Select Column --</option>
                     {selectedReview.detected_headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
@@ -392,8 +394,8 @@ export default function AdminPipeline() {
               <div className="grid-2" style={{ gap: 14 }}>
                 {promotePattern === 'split' && (
                   <div className="form-group">
-                    <label className="form-label">Credit Amount Column</label>
-                    <select className="input" value={amountCol2} onChange={(e) => setAmountCol2(e.target.value)}>
+                    <label htmlFor="amount-col-2" className="form-label">Credit Amount Column</label>
+                    <select id="amount-col-2" className="input" value={amountCol2} onChange={(e) => setAmountCol2(e.target.value)}>
                       <option value="">-- Select Column --</option>
                       {selectedReview.detected_headers.map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
@@ -402,8 +404,8 @@ export default function AdminPipeline() {
 
                 {promotePattern === 'flagged' && (
                   <div className="form-group">
-                    <label className="form-label">Txn Type Column (DR/CR Flag)</label>
-                    <select className="input" value={typeCol} onChange={(e) => setTypeCol(e.target.value)}>
+                    <label htmlFor="type-col" className="form-label">Txn Type Column (DR/CR Flag)</label>
+                    <select id="type-col" className="input" value={typeCol} onChange={(e) => setTypeCol(e.target.value)}>
                       <option value="">-- Select Column --</option>
                       {selectedReview.detected_headers.map(h => <option key={h} value={h}>{h}</option>)}
                     </select>
@@ -411,8 +413,8 @@ export default function AdminPipeline() {
                 )}
 
                 <div className="form-group">
-                  <label className="form-label">Closing Balance Column (Optional)</label>
-                  <select className="input" value={balCol} onChange={(e) => setBalCol(e.target.value)}>
+                  <label htmlFor="bal-col" className="form-label">Closing Balance Column (Optional)</label>
+                  <select id="bal-col" className="input" value={balCol} onChange={(e) => setBalCol(e.target.value)}>
                     <option value="">-- Select Column --</option>
                     {selectedReview.detected_headers.map(h => <option key={h} value={h}>{h}</option>)}
                   </select>
@@ -420,8 +422,9 @@ export default function AdminPipeline() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Description / Narration Columns (comma-separated, in order of priority)</label>
+                <label htmlFor="desc-cols" className="form-label">Description / Narration Columns (comma-separated, in order of priority)</label>
                 <input
+                  id="desc-cols"
                   type="text"
                   className="input"
                   placeholder="e.g. Particulars, Narration, Description"

@@ -86,7 +86,7 @@ function Sidebar() {
             width: '100%',
             cursor: 'pointer',
             border: '1px solid var(--border)',
-            background: profileOpen ? 'var(--bg)' : 'var(--bg)',
+            background: profileOpen ? 'var(--surface)' : 'var(--bg)',
             outline: profileOpen ? '2px solid rgba(28,25,23,0.12)' : 'none',
             outlineOffset: 1,
             transition: 'outline 120ms',

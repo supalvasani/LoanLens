@@ -54,8 +54,8 @@ export default function ManagerDashboard() {
           <div key={s.label} className="stat-card">
             <div className="flex items-center justify-between">
               <div className="stat-icon" style={{ background: s.bg, color: s.color }}>{s.icon}</div>
-              <span className={`stat-trend ${s.dir === 'up' ? 'up' : s.dir === 'warn' ? 'down' : 'up'}`}>
-                {s.dir === 'up' ? '↑' : s.dir === 'warn' ? '↑' : '↑'} {s.trend}
+              <span className={`stat-trend ${s.dir === 'up' ? 'up' : 'down'}`}>
+                {s.trend.startsWith('-') ? '↓' : '↑'} {s.trend}
               </span>
             </div>
             <div className="stat-value">{s.value}</div>

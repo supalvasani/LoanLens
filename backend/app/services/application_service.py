@@ -268,9 +268,11 @@ class ApplicationService:
 
         # 2. Enrich each application with mart data concurrently
         async def _none() -> None:
+            await asyncio.sleep(0)
             return None
 
         async def _false() -> bool:
+            await asyncio.sleep(0)
             return False
 
         async def _enrich(app: RawLoanApplication) -> AnalystQueueItem:

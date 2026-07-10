@@ -70,6 +70,7 @@ class ManagerService:
         )
 
         async def _none() -> None:
+            await asyncio.sleep(0)
             return None
 
         async def _enrich(app: Any) -> ManagerQueueItem:
@@ -271,7 +272,7 @@ class ManagerService:
         # Score distribution query
         db_score_dist = await self.mart_repo.get_portfolio_score_distribution()
         score_buckets = ["0-20", "21-40", "41-60", "61-80", "81-100"]
-        score_dist_map = {bucket: 0 for bucket in score_buckets}
+        score_dist_map = dict.fromkeys(score_buckets, 0)
         for item in db_score_dist:
             sb = item.get("score_bucket")
             if sb in score_dist_map:

@@ -94,7 +94,7 @@ def _parse_amount(val: str) -> Decimal | None:
     if not val:
         return None
     # Remove trailing annotation e.g. "12,345.00 (Low Balance)"
-    val = re.split(r"\s*\(", val)[0].strip()
+    val = val.split("(")[0].strip()
     val = val.replace(",", "")
     try:
         d = Decimal(val)
