@@ -1,7 +1,8 @@
-import { type ReactNode } from 'react';
+import { type ReactNode, useRef, useState } from 'react';
 import { useNavigate, Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import type { Role } from '../types/auth';
+import { ProfileModal } from './ProfileModal';
 
 const navByRole: Record<Role, { icon: string; label: string; path: string }[]> = {
   admin: [
@@ -41,14 +42,16 @@ const roleLabel: Record<Role, string> = {
 };
 
 function Sidebar() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const location = useLocation();
   const role = (user?.role ?? 'applicant') as Role;
   const items = navByRole[role] ?? [];
   const initials = user?.name
     ? user.name.split(' ').map((w: string) => w[0]).join('').toUpperCase().slice(0, 2)
     : '??';
+
+  const [profileOpen, setProfileOpen] = useState(false);
+  const tileRef = useRef<HTMLButtonElement>(null);
 
   return (
     <aside className="sidebar">
@@ -72,22 +75,58 @@ function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <div className="user-tile">
+        {/* Clickable user tile opens profile modal */}
+        <button
+          ref={tileRef}
+          id="user-profile-tile"
+          className="user-tile"
+          onClick={() => setProfileOpen((v) => !v)}
+          title="View profile"
+          style={{
+            width: '100%',
+            cursor: 'pointer',
+            border: '1px solid var(--border)',
+            background: profileOpen ? 'var(--bg)' : 'var(--bg)',
+            outline: profileOpen ? '2px solid rgba(28,25,23,0.12)' : 'none',
+            outlineOffset: 1,
+            transition: 'outline 120ms',
+            textAlign: 'left',
+          }}
+        >
           <div className="user-avatar">{initials}</div>
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="user-name">{user?.name ?? '—'}</div>
             <div className="user-role">{roleLabel[role]}</div>
           </div>
-          <button
-            className="btn btn-ghost btn-sm"
-            title="Sign out"
-            style={{ padding: '4px 8px', flexShrink: 0 }}
-            onClick={() => { logout(); navigate('/login', { replace: true }); }}
+          {/* chevron indicator */}
+          <svg
+            width="12"
+            height="12"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            style={{
+              color: 'var(--t3)',
+              flexShrink: 0,
+              transform: profileOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+              transition: 'transform 180ms',
+            }}
           >
-            ⏻
-          </button>
-        </div>
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
       </div>
+
+      {/* Profile modal */}
+      {profileOpen && (
+        <ProfileModal
+          onClose={() => setProfileOpen(false)}
+          anchorRef={tileRef as React.RefObject<HTMLElement | null>}
+        />
+      )}
     </aside>
   );
 }

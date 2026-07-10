@@ -15,11 +15,14 @@ Canonical rows are bulk-inserted into raw_transactions with ON CONFLICT DO NOTHI
 
 import json
 import uuid
+import os
+import sys
+import subprocess
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status
+from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile, status, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -215,6 +218,41 @@ async def _insert_review_queue(
 
 # ── Route ─────────────────────────────────────────────────────────────────────
 
+def run_dbt_background():
+    """Runs dbt models in the background after database updates."""
+    try:
+        current_file_path = os.path.abspath(__file__)
+        # Walk up 6 levels to get to the project root: routes -> v1 -> api -> app -> backend -> project_root
+        project_root = current_file_path
+        for _ in range(6):
+            project_root = os.path.dirname(project_root)
+
+        dbt_project_dir = os.path.join(project_root, "dbt", "loanlens")
+        dbt_profiles_dir = os.path.join(project_root, "dbt", "loanlens")
+
+        # Locate dbt executable (use venv's if available)
+        venv_bin = os.path.dirname(sys.executable)
+        dbt_exe = os.path.join(venv_bin, "dbt")
+        if os.name == "nt":
+            dbt_exe += ".exe"
+
+        if not os.path.exists(dbt_exe):
+            dbt_exe = "dbt"
+
+        logger.info("triggering_dbt_run_background", extra={"dbt_path": dbt_exe})
+
+        # Run dbt in background
+        subprocess.run(
+            [dbt_exe, "run", "--project-dir", dbt_project_dir, "--profiles-dir", dbt_profiles_dir],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=True
+        )
+        logger.info("dbt_run_background_completed")
+    except Exception as e:
+        logger.error("dbt_run_background_failed", extra={"error": str(e)})
+
+
 @router.post(
     "/bank-statement",
     response_model=StatementUploadResult,
@@ -224,6 +262,7 @@ async def _insert_review_queue(
 @limiter.limit("10/minute")
 async def upload_bank_statement(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="Bank statement CSV — any format"),
     current_user: User = Depends(require_role(RoleEnum.applicant)),
     db: AsyncSession = Depends(get_db),
@@ -363,6 +402,7 @@ async def upload_bank_statement(
     if ingest_result.status == STATUS_RECONCILIATION_WARN:
         await _insert_review_queue(db, ingest_result, file_name, "reconciliation_warn")
         await db.commit()
+        background_tasks.add_task(run_dbt_background)
         logger.warning(
             "bank_statement_reconciliation_warn",
             extra={
@@ -390,6 +430,7 @@ async def upload_bank_statement(
         )
 
     await db.commit()
+    background_tasks.add_task(run_dbt_background)
     logger.info(
         "bank_statement_upload_ok",
         extra={
