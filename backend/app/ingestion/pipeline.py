@@ -116,36 +116,42 @@ def _normalise_txn_type(raw: str) -> str | None:
 
 # ── Canonical resolution ──────────────────────────────────────────────────────
 
+def _extract_split_amount(row, mapping: ColumnMapping) -> tuple[Decimal | None, str | None, bool]:
+    debit_col, credit_col = mapping.amount_cols[0], mapping.amount_cols[1]
+    raw_debit = str(row.get(debit_col, "") or "").strip().replace(",", "")
+    raw_credit = str(row.get(credit_col, "") or "").strip().replace(",", "")
+    debit_val = _parse_amount(raw_debit)
+    credit_val = _parse_amount(raw_credit)
+    no_debit = debit_val is None or debit_val == Decimal("0")
+    no_credit = credit_val is None or credit_val == Decimal("0")
+    if no_debit and no_credit:
+        return None, None, True
+    if credit_val and credit_val > 0:
+        return credit_val, "credit", False
+    return debit_val, "debit", False
+
+
+def _extract_signed_amount(row, mapping: ColumnMapping) -> tuple[Decimal | None, str | None, bool]:
+    raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
+    clean = raw_amt.strip().replace(",", "")
+    try:
+        signed = Decimal(clean)
+        txn_type = "credit" if signed >= 0 else "debit"
+        return abs(signed), txn_type, False
+    except InvalidOperation:
+        return None, None, False
+
+
 def _extract_amount_and_type(row, mapping: ColumnMapping) -> tuple[Decimal | None, str | None, bool]:
     """Returns (amount, txn_type, is_empty_row)."""
     if mapping.amount_pattern == "flagged":
         raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
-        amount = _parse_amount(raw_amt)
         raw_type = str(row.get(mapping.txn_type_col, "") or "")
-        return amount, _normalise_txn_type(raw_type), False
-
+        return _parse_amount(raw_amt), _normalise_txn_type(raw_type), False
     if mapping.amount_pattern == "split":
-        debit_col, credit_col = mapping.amount_cols[0], mapping.amount_cols[1]
-        raw_debit = str(row.get(debit_col, "") or "").strip().replace(",", "")
-        raw_credit = str(row.get(credit_col, "") or "").strip().replace(",", "")
-        debit_val = _parse_amount(raw_debit)
-        credit_val = _parse_amount(raw_credit)
-        if (debit_val is None or debit_val == Decimal("0")) and \
-           (credit_val is None or credit_val == Decimal("0")):
-            return None, None, True
-        if credit_val and credit_val > 0:
-            return credit_val, "credit", False
-        return debit_val, "debit", False
-
+        return _extract_split_amount(row, mapping)
     if mapping.amount_pattern == "signed":
-        raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
-        clean = raw_amt.strip().replace(",", "")
-        try:
-            signed = Decimal(clean)
-            return abs(signed), ("credit" if signed >= 0 else "debit"), False
-        except InvalidOperation:
-            pass
-
+        return _extract_signed_amount(row, mapping)
     return None, None, False
 
 

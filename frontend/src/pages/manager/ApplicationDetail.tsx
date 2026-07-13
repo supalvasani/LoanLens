@@ -85,6 +85,60 @@ function getDecisionHistoryBadgeClass(decision: string): string {
   return 'badge-warn';
 }
 
+function ManagerDetailLoading() {
+  return (
+    <DashboardShell title="Loading…" subtitle="Fetching credit report">
+      <div style={{ textAlign: 'center', padding: 80, color: 'var(--t3)' }}>
+        <span className="spinner" style={{ fontSize: 20, marginRight: 8 }} />{' '}
+        Loading application…
+      </div>
+    </DashboardShell>
+  );
+}
+
+function ManagerDetailError({ error, onBack }: Readonly<{ error: string; onBack: () => void }>) {
+  return (
+    <DashboardShell title="Error">
+      <div className="alert alert-error"><span>⚠</span><span>{error}</span></div>
+      <button className="btn btn-secondary" style={{ marginTop: 16 }} onClick={onBack}>
+        ← Back
+      </button>
+    </DashboardShell>
+  );
+}
+
+function ManagerDetailActionDone({
+  id,
+  actionDone,
+  onQueue,
+  onDashboard,
+}: Readonly<{
+  id?: string;
+  actionDone: string;
+  onQueue: () => void;
+  onDashboard: () => void;
+}>) {
+  return (
+    <DashboardShell title="Decision Recorded">
+      <div className="alert alert-success" style={{ marginBottom: 20 }}>
+        <span>✓</span>
+        <span>
+          Application <strong>{id?.slice(0, 8)}…</strong> has been{' '}
+          <strong>{actionDone === 'approved' ? 'Approved' : 'Rejected'}</strong>.
+        </span>
+      </div>
+      <div style={{ display: 'flex', gap: 10 }}>
+        <button className="btn btn-secondary" onClick={onQueue}>
+          ← Back to Queue
+        </button>
+        <button className="btn btn-ghost" onClick={onDashboard}>
+          Dashboard
+        </button>
+      </div>
+    </DashboardShell>
+  );
+}
+
 export default function ManagerApplicationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -142,43 +196,20 @@ export default function ManagerApplicationDetail() {
       .finally(() => setSubmitting(false));
   }
 
-  if (loading) return (
-    <DashboardShell title="Loading…" subtitle="Fetching credit report">
-      <div style={{ textAlign: 'center', padding: 80, color: 'var(--t3)' }}>
-        <span className="spinner" style={{ fontSize: 20, marginRight: 8 }} />{' '}
-        Loading application…
-      </div>
-    </DashboardShell>
-  );
+  if (loading) return <ManagerDetailLoading />;
 
-  if (error || !detail) return (
-    <DashboardShell title="Error">
-      <div className="alert alert-error"><span>⚠</span><span>{error || 'Application not found'}</span></div>
-      <button className="btn btn-secondary" style={{ marginTop: 16 }} onClick={() => navigate(-1)}>
-        ← Back
-      </button>
-    </DashboardShell>
-  );
+  if (error || !detail) return <ManagerDetailError error={error || 'Application not found'} onBack={() => navigate(-1)} />;
 
-  if (actionDone) return (
-    <DashboardShell title="Decision Recorded">
-      <div className="alert alert-success" style={{ marginBottom: 20 }}>
-        <span>✓</span>
-        <span>
-          Application <strong>{id?.slice(0, 8)}…</strong> has been{' '}
-          <strong>{actionDone === 'approved' ? 'Approved' : 'Rejected'}</strong>.
-        </span>
-      </div>
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button className="btn btn-secondary" onClick={() => navigate('/manager/queue')}>
-          ← Back to Queue
-        </button>
-        <button className="btn btn-ghost" onClick={() => navigate('/manager/dashboard')}>
-          Dashboard
-        </button>
-      </div>
-    </DashboardShell>
-  );
+  if (actionDone) {
+    return (
+      <ManagerDetailActionDone
+        id={id}
+        actionDone={actionDone}
+        onQueue={() => navigate('/manager/queue')}
+        onDashboard={() => navigate('/manager/dashboard')}
+      />
+    );
+  }
 
   const {
     application: app,

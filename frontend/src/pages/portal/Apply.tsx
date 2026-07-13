@@ -27,6 +27,12 @@ interface FormErrors {
   file?: string;
 }
 
+function getApplyDropzoneBorder(hasError: boolean, hasFile: boolean): string {
+  if (hasError) return 'var(--bad)';
+  if (hasFile) return 'var(--ok)';
+  return 'var(--border)';
+}
+
 export default function PortalApply() {
   const navigate = useNavigate();
   const fileRef  = useRef<HTMLInputElement>(null);
@@ -269,19 +275,21 @@ export default function PortalApply() {
               style={{ display: 'none' }}
               onChange={handleFileChange}
             />
-            <div
-              tabIndex={0}
+            <button
+              type="button"
               style={{
-                border: `2px dashed ${errors.file ? 'var(--bad)' : file ? 'var(--ok)' : 'var(--border)'}`,
+                width: '100%',
+                border: `2px dashed ${getApplyDropzoneBorder(Boolean(errors.file), Boolean(file))}`,
                 borderRadius: 8,
                 padding: '24px 16px',
                 textAlign: 'center',
                 cursor: 'pointer',
                 background: file ? 'rgba(34,197,94,.04)' : 'var(--bg)',
                 transition: 'all 150ms',
+                font: 'inherit',
+                color: 'inherit',
               }}
               onClick={() => fileRef.current?.click()}
-              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') fileRef.current?.click(); }}
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) { setFile(f); setErrors(p => ({ ...p, file: undefined })); } }}
             >
@@ -302,7 +310,7 @@ export default function PortalApply() {
                   <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 3 }}>Max 5 MB · CSV only</div>
                 </div>
               )}
-            </div>
+            </button>
             {errors.file && <div style={{ fontSize: 11, color: 'var(--bad)', marginTop: 6 }}>{errors.file}</div>}
             {file && (
               <button type="button" className="btn btn-ghost btn-sm" style={{ marginTop: 8 }} onClick={() => { setFile(null); if (fileRef.current) fileRef.current.value = ''; }}>

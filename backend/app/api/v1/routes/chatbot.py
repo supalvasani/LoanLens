@@ -75,7 +75,7 @@ async def chat(
         logger.error("chatbot_llm_error", extra={"error": str(exc)})
         from fastapi import HTTPException
         raise HTTPException(
-            status_code=503,
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="LoanBot is temporarily unavailable. Please try again shortly.",
         )
 

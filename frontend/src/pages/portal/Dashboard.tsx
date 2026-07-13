@@ -37,19 +37,18 @@ function getPortalScoreColor(scoreNum?: number | null): string {
 function QuickCard({ icon, label, path, desc }: Readonly<{ icon: React.ReactNode; label: string; path: string; desc: string }>) {
   const navigate = useNavigate();
   return (
-    <div
-      tabIndex={0}
+    <button
+      type="button"
       className="card"
-      style={{ cursor: 'pointer', transition: 'box-shadow 150ms', padding: '18px 20px' }}
+      style={{ width: '100%', textAlign: 'left', font: 'inherit', cursor: 'pointer', transition: 'box-shadow 150ms', padding: '18px 20px', border: '1px solid var(--border)' }}
       onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--sh-md)')}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = 'var(--sh)')}
       onClick={() => navigate(path)}
-      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate(path); }}
     >
       <div style={{ color: 'var(--ink)', marginBottom: 10, display: 'flex', alignItems: 'center' }}>{icon}</div>
       <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--t1)', marginBottom: 4 }}>{label}</div>
       <div style={{ fontSize: 12, color: 'var(--t3)' }}>{desc}</div>
-    </div>
+    </button>
   );
 }
 

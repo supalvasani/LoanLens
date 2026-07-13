@@ -95,13 +95,13 @@ flags as (
         end as severity,
         c_txn.txn_date as detected_at
     from "loanlens_db"."public_staging"."stg_transactions" c_txn
+    cross join constants c
     join "loanlens_db"."public_staging"."stg_transactions" d
         on c_txn.raw_applicant_id = d.raw_applicant_id
        and c_txn.txn_type = c.c_credit
        and d.txn_type = c.c_debit
        and c_txn.amount = d.amount
        and d.txn_date between c_txn.txn_date and c_txn.txn_date + interval '3 days'
-    cross join constants c
     where lower(c_txn.description) like '%transfer%'
        or lower(d.description) like '%transfer%'
        or lower(c_txn.description) like '%neft%'

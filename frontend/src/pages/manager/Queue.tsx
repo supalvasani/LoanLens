@@ -46,17 +46,17 @@ function renderQueueTableRows(
         onClick={() => navigate(`/manager/applications/${app.application_id}`)}
       >
         <td style={{ fontWeight: 600 }}>
-          {app.applicant_name || 'Unknown'}
+          {app.applicant_name ?? 'Unknown'}
         </td>
         <td style={{ textTransform: 'capitalize' }}>
           {app.loan_type.replaceAll('_', ' ')}
         </td>
         <td>₹{Number(app.amount_requested).toLocaleString('en-IN')}</td>
         <td style={{ fontWeight: 700, color: scoreColor }}>
-          {score !== null ? score : '—'}
+          {score ?? '—'}
         </td>
         <td style={{ maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--t2)' }}>
-          {app.escalation_reason || 'No note'}
+          {app.escalation_reason ?? 'No note'}
         </td>
         <td>
           {hasFraud ? (
@@ -71,7 +71,7 @@ function renderQueueTableRows(
           {app.escalated_at ? new Date(app.escalated_at).toLocaleDateString('en-IN') : '—'}
         </td>
         <td style={{ fontSize: 12 }}>
-          {app.escalated_by_name || 'Analyst'}
+          {app.escalated_by_name ?? 'Analyst'}
         </td>
         <td>
           <button className="btn btn-primary btn-sm">

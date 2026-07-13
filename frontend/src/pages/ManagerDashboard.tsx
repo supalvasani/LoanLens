@@ -76,11 +76,17 @@ export default function ManagerDashboard() {
           </div>
           <div style={{ padding: '8px 0' }}>
             {ESCALATIONS.map((esc) => (
-              <div
+              <button
+                type="button"
                 key={esc.id}
                 onClick={() => setSelectedApp(selectedApp === esc.id ? null : esc.id)}
                 style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  font: 'inherit',
+                  color: 'inherit',
                   padding: '12px 20px',
+                  border: 'none',
                   borderBottom: '1px solid var(--color-border-subtle)',
                   cursor: 'pointer',
                   background: selectedApp === esc.id ? 'rgba(99,102,241,0.08)' : 'transparent',
@@ -109,6 +115,7 @@ export default function ManagerDashboard() {
                     className="flex gap-2"
                     style={{ marginTop: 10 }}
                     onClick={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
                   >
                     <button className="btn btn-primary btn-sm" style={{ flex: 1 }}>✅ Approve</button>
                     <button className="btn btn-danger btn-sm" style={{ flex: 1 }}>❌ Reject</button>
@@ -118,7 +125,7 @@ export default function ManagerDashboard() {
                 <div style={{ marginTop: 8, fontSize: 11, color: 'var(--color-warning)', background: 'rgba(245,158,11,0.08)', padding: '3px 8px', borderRadius: 4 }}>
                   ⚡ Reason: {esc.reason}
                 </div>
-              </div>
+              </button>
             ))}
           </div>
         </div>

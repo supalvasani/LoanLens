@@ -129,9 +129,10 @@ export default function PortalStatements() {
             onChange={handleFileChange}
           />
 
-          <div
-            tabIndex={0}
+          <button
+            type="button"
             style={{
+              width: '100%',
               border: `2px dashed ${getStatementDropzoneBorder(dragOver, file)}`,
               borderRadius: 10,
               padding: '36px 24px',
@@ -139,9 +140,10 @@ export default function PortalStatements() {
               cursor: 'pointer',
               background: getStatementDropzoneBg(dragOver, file),
               transition: 'all 150ms',
+              font: 'inherit',
+              color: 'inherit',
             }}
             onClick={() => !file && fileRef.current?.click()}
-            onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !file) fileRef.current?.click(); }}
             onDragOver={e => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
@@ -173,7 +175,7 @@ export default function PortalStatements() {
                 <div style={{ fontSize: 12, color: 'var(--t3)', marginTop: 6 }}>or click to browse · Max 5 MB</div>
               </>
             )}
-          </div>
+          </button>
 
           {error && (
             <div className="alert alert-error" style={{ marginTop: 14 }}>
