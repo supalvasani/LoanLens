@@ -18,11 +18,15 @@
         'high' as c_high
 ),
 
+stg_txns as (
+    select * from "loanlens_db"."public_staging"."stg_transactions"
+),
+
 avg_credits as (
     select
         raw_applicant_id as applicant_id,
         avg(amount) as avg_credit
-    from "loanlens_db"."public_staging"."stg_transactions"
+    from stg_txns
     cross join constants c
     where txn_type = c.c_credit
     group by 1
@@ -51,7 +55,7 @@ flags as (
             else c.c_low
         end as severity,
         t.txn_date as detected_at
-    from "loanlens_db"."public_staging"."stg_transactions" t
+    from stg_txns t
     join avg_credits ac on t.raw_applicant_id = ac.applicant_id
     cross join constants c
     where t.txn_type = c.c_credit
@@ -84,7 +88,7 @@ flags as (
         'More than 50 small debits under INR 500 detected' as flag_detail,
         c.c_med as severity,
         max(txn_date) as detected_at
-    from "loanlens_db"."public_staging"."stg_transactions"
+    from stg_txns
     cross join constants c
     where txn_type = c.c_debit
       and amount < 500
@@ -104,9 +108,9 @@ flags as (
             else c.c_low
         end as severity,
         c_txn.txn_date as detected_at
-    from "loanlens_db"."public_staging"."stg_transactions" c_txn
+    from stg_txns c_txn
     cross join constants c
-    join "loanlens_db"."public_staging"."stg_transactions" d
+    join stg_txns d
         on c_txn.raw_applicant_id = d.raw_applicant_id
        and c_txn.txn_type = c.c_credit
        and d.txn_type = c.c_debit

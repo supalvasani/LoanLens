@@ -21,6 +21,12 @@ function scoreBg(score: number | null): string {
   return 'var(--bad-b)';
 }
 
+function getPendingCountLabel(loading: boolean, count: number): string {
+  if (loading) return '…';
+  if (count === 1) return '1 application';
+  return `${count} applications`;
+}
+
 const STATUS_BADGE: Record<string, string> = {
   pending:      'badge-warn',
   under_review: 'badge-warn',
@@ -102,6 +108,7 @@ function InlineActions({
 
   return (
     <div
+      role="presentation"
       style={{ minWidth: 280 }}
       onClick={e => e.stopPropagation()}
       onKeyDown={e => e.stopPropagation()}
@@ -290,7 +297,7 @@ export default function AnalystQueue() {
             Pending Action
           </span>
           <span style={{ fontSize: 12, color: 'var(--t3)' }}>
-            {loading ? '…' : `${pending.length} application${pending.length !== 1 ? 's' : ''}`}
+            {getPendingCountLabel(loading, pending.length)}
           </span>
         </div>
         {loading ? (

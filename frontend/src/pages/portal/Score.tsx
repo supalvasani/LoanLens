@@ -58,10 +58,16 @@ function ScoreRing({ score }: Readonly<{ score: number }>) {
   );
 }
 
+function getComponentScoreColor(score: number): string {
+  if (score >= 70) return 'var(--ok)';
+  if (score >= 45) return 'var(--warn)';
+  return 'var(--bad)';
+}
+
 // ── Component bar ─────────────────────────────────────────────────────────────
-function ComponentBar({ c }: { c: ScoreComponent }) {
+function ComponentBar({ c }: Readonly<{ c: ScoreComponent }>) {
   const score = c.score ?? 0;
-  const color = score >= 70 ? 'var(--ok)' : score >= 45 ? 'var(--warn)' : 'var(--bad)';
+  const color = getComponentScoreColor(score);
   return (
     <div style={{ marginBottom: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
@@ -80,7 +86,7 @@ function ComponentBar({ c }: { c: ScoreComponent }) {
 }
 
 // ── No data empty state ────────────────────────────────────────────────────────
-function NoDataState({ onNavigate }: { onNavigate: () => void }) {
+function NoDataState({ onNavigate }: Readonly<{ onNavigate: () => void }>) {
   return (
     <div className="card" style={{ textAlign: 'center', padding: '56px 24px' }}>
       <div style={{ color: 'var(--ink)', marginBottom: 16, display: 'flex', justifyContent: 'center' }}>

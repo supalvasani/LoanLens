@@ -210,27 +210,37 @@ export default function ManagerDashboard() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
+              {loading && (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: 40, color: 'var(--t3)' }}>
                     <span className="spinner" style={{ marginRight: 8 }}></span> Loading escalations…
                   </td>
                 </tr>
-              ) : recentEscalations.length === 0 ? (
+              )}
+              {!loading && recentEscalations.length === 0 && (
                 <tr>
                   <td colSpan={7} style={{ textAlign: 'center', padding: '40px 16px', color: 'var(--t3)' }}>
                     All clear — no urgent escalations at the moment.
                   </td>
                 </tr>
-              ) : (
+              )}
+              {!loading && recentEscalations.length > 0 && (
                 recentEscalations.map((app) => {
                   const hasFraud = app.fraud_flags && app.fraud_flags.length > 0;
 
                   return (
                     <tr
                       key={app.application_id}
+                      role="button"
+                      tabIndex={0}
                       style={{ cursor: 'pointer' }}
                       onClick={() => navigate(`/manager/applications/${app.application_id}`)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          navigate(`/manager/applications/${app.application_id}`);
+                        }
+                      }}
                     >
                       <td style={{ fontWeight: 500 }}>
                         {app.applicant_name || 'Unknown Applicant'}

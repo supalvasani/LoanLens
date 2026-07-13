@@ -150,12 +150,16 @@ export default function ApplicantDashboard() {
       {/* Quick apply modal (simplified overlay) */}
       {showApply && (
         <div
+          role="presentation"
           tabIndex={-1}
           onClick={() => setShowApply(false)}
           onKeyDown={(e) => { if (e.key === 'Escape') setShowApply(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
         >
           <div
+            role="dialog"
+            aria-modal="true"
+            tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => e.stopPropagation()}
             className="card animate-slideup"

@@ -88,7 +88,7 @@ export default function PortalDashboard() {
               </div>
               {score?.risk_tier && (
                 <div style={{ fontSize: 11, fontWeight: 600, color: scoreColor, marginTop: 6, textTransform: 'uppercase', letterSpacing: '.06em' }}>
-                  {score.risk_tier.replace(/_/g, ' ')}
+                  {score.risk_tier.replaceAll('_', ' ')}
                 </div>
               )}
               {!score?.has_data && (
@@ -128,7 +128,7 @@ export default function PortalDashboard() {
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
                 <div>
                   <div style={{ fontWeight: 700, fontSize: 16, color: 'var(--t1)', marginBottom: 4 }}>
-                    {LOAN_LABELS[latestApp.loan_type] ?? latestApp.loan_type.replace(/_/g, ' ')}
+                    {LOAN_LABELS[latestApp.loan_type] ?? latestApp.loan_type.replaceAll('_', ' ')}
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--t2)' }}>
                     ₹{Number(latestApp.amount_requested).toLocaleString('en-IN')} · {(latestApp.purpose ?? '').slice(0, 80)}{(latestApp.purpose ?? '').length > 80 ? '…' : ''}

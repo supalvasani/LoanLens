@@ -22,12 +22,16 @@
         interval '6 months' as lookback_interval
 ),
 
+int_txns_cat as (
+    select * from "loanlens_db"."public_intermediate"."int_transactions_categorized"
+),
+
 monthly_income as (
     select
         t.applicant_id,
         date_trunc(c.c_month, t.txn_date)::date as month,
         sum(case when t.txn_type = c.c_credit and t.category in ('income', 'salary') then t.amount else 0 end) as income
-    from "loanlens_db"."public_intermediate"."int_transactions_categorized" t
+    from int_txns_cat t
     cross join constants c
     where t.txn_date >= date_trunc(c.c_month, current_date - c.lookback_interval)::date
     group by 1, 2
@@ -38,7 +42,7 @@ monthly_emi as (
         t.applicant_id,
         date_trunc(c.c_month, t.txn_date)::date as month,
         sum(case when t.txn_type = c.c_debit and t.category in ('emi', 'loan_obligation') then t.amount else 0 end) as emi
-    from "loanlens_db"."public_intermediate"."int_transactions_categorized" t
+    from int_txns_cat t
     cross join constants c
     where t.txn_date >= date_trunc(c.c_month, current_date - c.lookback_interval)::date
     group by 1, 2
@@ -49,7 +53,7 @@ monthly_bounces as (
         t.applicant_id,
         date_trunc(c.c_month, t.txn_date)::date as month,
         count(*) filter (where t.category = 'bounce') as bounce_count
-    from "loanlens_db"."public_intermediate"."int_transactions_categorized" t
+    from int_txns_cat t
     cross join constants c
     where t.txn_date >= date_trunc(c.c_month, current_date - c.lookback_interval)::date
     group by 1, 2

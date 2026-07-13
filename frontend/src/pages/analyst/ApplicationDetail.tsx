@@ -31,6 +31,51 @@ function getRejectButtonTitle(canReject: boolean, hasFraud: boolean, score: numb
   return `Score ${score?.toFixed(1)} ≥ 45 — must escalate`;
 }
 
+function AnalystFraudAlert({ fraudFlags }: Readonly<{ fraudFlags: { flag_type: string; flag_detail: string; severity: string }[] }>) {
+  return (
+    <div style={{
+      marginBottom: 20, padding: '14px 18px',
+      background: 'var(--bad-b)', border: '1px solid rgba(198,40,40,.25)',
+      borderRadius: 'var(--r-md)',
+    }}>
+      <div style={{ fontWeight: 700, color: 'var(--bad)', marginBottom: 8, fontSize: 13 }}>
+        ⚠ Fraud Signals Detected — Escalation Required
+      </div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+        {fraudFlags.map((f) => (
+          <div key={f.flag_type} style={{
+            padding: '6px 12px', background: '#fff',
+            border: '1px solid rgba(198,40,40,.2)', borderRadius: 'var(--r-sm)',
+            fontSize: 12,
+          }}>
+            <span style={{ fontWeight: 600, color: 'var(--bad)' }}>
+              {f.flag_type.replaceAll('_', ' ')}
+            </span>
+            <span className="badge badge-bad" style={{ marginLeft: 8 }}>{f.severity}</span>
+            {f.flag_detail && (
+              <div style={{ color: 'var(--t2)', marginTop: 2 }}>{f.flag_detail}</div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function DecisionExplanation({ hasFraud, score }: Readonly<{ hasFraud: boolean; score: number | null }>) {
+  if (hasFraud) return <div>⚠ Fraud flags detected — only escalation is allowed.</div>;
+  if (score !== null && score >= 45 && score <= 65) {
+    return <div>⚠ Score {score.toFixed(1)} is in the grey zone (45–65) — escalation required.</div>;
+  }
+  if (score !== null && score > 65) {
+    return <div>✓ Score qualifies for approval. Rejection not available at this score.</div>;
+  }
+  if (score !== null && score < 45) {
+    return <div>✓ Score qualifies for rejection. Approval not available at this score.</div>;
+  }
+  return null;
+}
+
 export default function ApplicationDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -90,35 +135,7 @@ export default function ApplicationDetail() {
         </div>
       }
     >
-      {/* Fraud Alert */}
-      {hasFraud && (
-        <div style={{
-          marginBottom: 20, padding: '14px 18px',
-          background: 'var(--bad-b)', border: '1px solid rgba(198,40,40,.25)',
-          borderRadius: 'var(--r-md)',
-        }}>
-          <div style={{ fontWeight: 700, color: 'var(--bad)', marginBottom: 8, fontSize: 13 }}>
-            ⚠ Fraud Signals Detected — Escalation Required
-          </div>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {fraud_flags.map((f) => (
-              <div key={f.flag_type} style={{
-                padding: '6px 12px', background: '#fff',
-                border: '1px solid rgba(198,40,40,.2)', borderRadius: 'var(--r-sm)',
-                fontSize: 12,
-              }}>
-                <span style={{ fontWeight: 600, color: 'var(--bad)' }}>
-                  {f.flag_type.replaceAll('_', ' ')}
-                </span>
-                <span className="badge badge-bad" style={{ marginLeft: 8 }}>{f.severity}</span>
-                {f.flag_detail && (
-                  <div style={{ color: 'var(--t2)', marginTop: 2 }}>{f.flag_detail}</div>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {hasFraud && <AnalystFraudAlert fraudFlags={fraud_flags} />}
 
       {/* Credit Report Details & Visualizations */}
       <ApplicationDetailReport detail={data} role="analyst" />
@@ -196,18 +213,9 @@ export default function ApplicationDetail() {
               </button>
             </div>
 
-            {(!canApprove || !canReject) && canDecide && (
+            {(!canApprove || !canReject) && (
               <div style={{ marginTop: 12, fontSize: 12, color: 'var(--t2)' }}>
-                {hasFraud && <div>⚠ Fraud flags detected — only escalation is allowed.</div>}
-                {!hasFraud && score !== null && score >= 45 && score <= 65 && (
-                  <div>⚠ Score {score.toFixed(1)} is in the grey zone (45–65) — escalation required.</div>
-                )}
-                {!hasFraud && score !== null && score > 65 && (
-                  <div>✓ Score qualifies for approval. Rejection not available at this score.</div>
-                )}
-                {!hasFraud && score !== null && score < 45 && (
-                  <div>✓ Score qualifies for rejection. Approval not available at this score.</div>
-                )}
+                <DecisionExplanation hasFraud={hasFraud} score={score} />
               </div>
             )}
           </>

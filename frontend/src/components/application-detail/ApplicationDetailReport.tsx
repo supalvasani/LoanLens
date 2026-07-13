@@ -11,6 +11,7 @@ import {
 } from './ApplicationDetailShared';
 import {
   scoreColor,
+  getScoreBarColor,
   getRiskSegmentColor,
   getDecisionBadgeClass,
   PIE_COLORS,
@@ -87,7 +88,7 @@ export function ApplicationDetailReport({ detail, role = 'analyst' }: Readonly<A
                   {scoreBarData.map((entry) => (
                     <Cell
                       key={entry.name}
-                      fill={entry.value >= 70 ? '#2E7D32' : entry.value >= 45 ? '#d97706' : '#C62828'}
+                      fill={getScoreBarColor(entry.value)}
                     />
                   ))}
                 </Bar>
