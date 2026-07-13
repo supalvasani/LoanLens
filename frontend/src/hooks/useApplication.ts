@@ -1,13 +1,20 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // useApplication — fetches a single application by ID
-// Supports both the standard endpoint and the analyst-enriched endpoint
+// Supports standard, analyst-enriched, and manager-enriched endpoints
 // ─────────────────────────────────────────────────────────────────────────────
 import { useState, useEffect } from 'react';
 import { loanService } from '../services/loanService';
+import { managerService } from '../services/managerService';
 import type { ApplicationFull } from '../types/loan';
 
+export type ManagerApplicationFull = ApplicationFull & {
+  escalation_reason: string | null;
+  escalated_by_name: string | null;
+  escalated_at: string | null;
+};
+
 interface UseApplicationReturn {
-  data: ApplicationFull | null;
+  data: ManagerApplicationFull | null;
   loading: boolean;
   error: string | null;
   refetch: () => void;
@@ -15,13 +22,13 @@ interface UseApplicationReturn {
 
 /**
  * @param id  Application UUID. Pass undefined/null to skip fetching.
- * @param mode 'analyst' uses the enriched analyst endpoint; 'standard' uses the normal one.
+ * @param mode 'analyst' uses analyst endpoint; 'manager' uses manager endpoint; 'standard' uses default.
  */
 export function useApplication(
   id: string | undefined | null,
-  mode: 'analyst' | 'standard' = 'standard',
+  mode: 'analyst' | 'manager' | 'standard' = 'standard',
 ): UseApplicationReturn {
-  const [data, setData]       = useState<ApplicationFull | null>(null);
+  const [data, setData]       = useState<ManagerApplicationFull | null>(null);
   const [loading, setLoading] = useState(!!id);
   const [error, setError]     = useState<string | null>(null);
   const [tick, setTick]       = useState(0);
@@ -45,14 +52,22 @@ export function useApplication(
 
   useEffect(() => {
     if (!id) return;
-    const fetch = mode === 'analyst'
-      ? loanService.getAnalystApplication(id)
-      : loanService.getApplication(id);
 
+    let fetchPromise: Promise<ManagerApplicationFull>;
+    if (mode === 'analyst') {
+      fetchPromise = loanService.getAnalystApplication(id) as Promise<ManagerApplicationFull>;
+    } else if (mode === 'manager') {
+      fetchPromise = managerService.getApplication(id);
+    } else {
+      fetchPromise = loanService.getApplication(id) as Promise<ManagerApplicationFull>;
+    }
 
-    fetch
+    fetchPromise
       .then(setData)
-      .catch(() => setError('Failed to load application.'))
+      .catch((err) => {
+        const msg = err?.response?.data?.detail || 'Failed to load application.';
+        setError(msg);
+      })
       .finally(() => setLoading(false));
   }, [id, mode, tick]);
 
