@@ -29,3 +29,9 @@ Thumbs.db
 
 # Metabase Local Download
 metabase/
+
+# dbt Build & Generated Artifacts
+dbt/loanlens/target/
+dbt/loanlens/dbt_packages/
+dbt/loanlens/logs/
+**/target/
