@@ -36,7 +36,23 @@
 
 
 
-with config as (
+with constants as (
+    select
+        'home_loan' as p_home,
+        'personal_loan' as p_personal,
+        'business_loan' as p_business,
+        'auto_loan' as p_auto,
+        'education_loan' as p_education,
+        'two_wheeler_loan' as p_two_wheeler,
+        0.40::numeric as f_home,
+        0.50::numeric as f_personal,
+        0.65::numeric as f_business,
+        0.60::numeric as f_education,
+        'reject' as dec_reject,
+        'approve' as dec_approve
+),
+
+config as (
     select * from "loanlens_db"."public"."loan_type_config"
 ),
 
@@ -106,23 +122,23 @@ eligibility_computed as (
 
         -- ── FOIR ceiling per product ────────────────────────────────────
         case c.loan_type::text
-            when 'home_loan'       then 0.40
-            when 'personal_loan'   then 0.50
-            when 'business_loan'   then 0.65
-            when 'auto_loan'       then 0.50
-            when 'education_loan'  then 0.60
-            when 'two_wheeler_loan' then 0.50
-            else 0.50
+            when cn.p_home           then cn.f_home
+            when cn.p_personal       then cn.f_personal
+            when cn.p_business       then cn.f_business
+            when cn.p_auto           then cn.f_personal
+            when cn.p_education      then cn.f_education
+            when cn.p_two_wheeler    then cn.f_personal
+            else cn.f_personal
         end as foir_ceiling,
 
         -- ── Minimum data months required per product ─────────────────
         case c.loan_type::text
-            when 'home_loan'       then 6
-            when 'business_loan'   then 6
-            when 'personal_loan'   then 3
-            when 'auto_loan'       then 3
-            when 'education_loan'  then 3
-            when 'two_wheeler_loan' then 2
+            when cn.p_home           then 6
+            when cn.p_business       then 6
+            when cn.p_personal       then 3
+            when cn.p_auto           then 3
+            when cn.p_education      then 3
+            when cn.p_two_wheeler    then 2
             else 3
         end as min_data_months,
 
@@ -142,18 +158,19 @@ eligibility_computed as (
         -- This is the max EMI a borrower can afford
         a.detected_monthly_income * (
             case c.loan_type::text
-                when 'home_loan'       then 0.40
-                when 'personal_loan'   then 0.50
-                when 'business_loan'   then 0.65
-                when 'auto_loan'       then 0.50
-                when 'education_loan'  then 0.60
-                when 'two_wheeler_loan' then 0.50
-                else 0.50
+                when cn.p_home           then cn.f_home
+                when cn.p_personal       then cn.f_personal
+                when cn.p_business       then cn.f_business
+                when cn.p_auto           then cn.f_personal
+                when cn.p_education      then cn.f_education
+                when cn.p_two_wheeler    then cn.f_personal
+                else cn.f_personal
             end
         ) as max_monthly_emi_capacity
 
     from applicants a
     cross join config c
+    cross join constants cn
     left join scores s on a.applicant_id = s.applicant_id
     left join applications app
         on a.applicant_id = app.applicant_id
@@ -222,46 +239,47 @@ select
 
     -- ── Human-readable gap reason ─────────────────────────────────────
     case
-        when score < min_score
+        when f.score < f.min_score
             then 'low_score'
-        when foir_breached
+        when f.foir_breached
             then 'high_emi_burden'
-        when insufficient_data
+        when f.insufficient_data
             then 'insufficient_data'
-        when emi_burden_ratio > 0.35 and loan_type = 'home_loan'
+        when f.emi_burden_ratio > 0.35 and f.loan_type = cn.p_home
             then 'high_emi_burden'
-        when income_stability_score < 60 and loan_type in ('home_loan','business_loan')
+        when f.income_stability_score < 60 and f.loan_type in (cn.p_home, cn.p_business)
             then 'low_income_stability'
-        when applied_amount > eligible_amount_raw
+        when f.applied_amount > f.eligible_amount_raw
             then 'above_max_amount'
         else null
     end as gap_reason,
 
     -- ── Decision ─────────────────────────────────────────────────────
     case
-        when score < min_score   then 'reject'
-        when foir_breached       then 'reject'
-        when score >= approve_threshold
-             and not foir_breached
-             and applied_amount <= greatest(0,
+        when f.score < f.min_score   then cn.dec_reject
+        when f.foir_breached         then cn.dec_reject
+        when f.score >= f.approve_threshold
+             and not f.foir_breached
+             and f.applied_amount <= greatest(0,
                  case
-                     when insufficient_data then eligible_amount_raw * 0.20
-                     else eligible_amount_raw
+                     when f.insufficient_data then f.eligible_amount_raw * 0.20
+                     else f.eligible_amount_raw
                  end
-             ) then 'approve'
-        when score >= review_lower then 'partial'
-        else 'reject'
+             ) then cn.dec_approve
+        when f.score >= f.review_lower then 'partial'
+        else cn.dec_reject
     end as decision,
 
     -- ── Diagnostic columns for analyst transparency ───────────────────
-    round(score, 1)                            as credit_score,
-    round(foir_actual * 100, 1)                as foir_pct,
-    round(foir_ceiling * 100, 0)               as foir_ceiling_pct,
-    round(coverage_confidence * 100, 0)        as data_coverage_pct,
-    data_months                                as observed_months,
-    min_data_months                            as required_months,
-    round(score_multiplier * 100, 0)           as score_multiplier_pct,
-    round(detected_monthly_income, 0)          as detected_monthly_income,
-    round(max_monthly_emi_capacity, 0)         as max_affordable_emi
+    round(f.score, 1)                            as credit_score,
+    round(f.foir_actual * 100, 1)                as foir_pct,
+    round(f.foir_ceiling * 100, 0)               as foir_ceiling_pct,
+    round(f.coverage_confidence * 100, 0)        as data_coverage_pct,
+    f.data_months                                as observed_months,
+    f.min_data_months                            as required_months,
+    round(f.score_multiplier * 100, 0)           as score_multiplier_pct,
+    round(f.detected_monthly_income, 0)          as detected_monthly_income,
+    round(f.max_monthly_emi_capacity, 0)         as max_affordable_emi
 
-from final
+from final f
+cross join constants cn

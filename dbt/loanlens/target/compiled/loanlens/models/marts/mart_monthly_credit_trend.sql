@@ -1,41 +1,59 @@
-with monthly_income as (
+with constants as (
     select
-        applicant_id,
-        date_trunc('month', txn_date)::date as month,
-        sum(case when txn_type = 'credit' and category in ('income', 'salary') then amount else 0 end) as income
-    from "loanlens_db"."public_intermediate"."int_transactions_categorized"
-    where txn_date >= date_trunc('month', current_date - interval '6 months')::date
+        'credit' as c_credit,
+        'debit' as c_debit,
+        'month' as c_month,
+        0.30::numeric as w_income,
+        0.25::numeric as w_emi,
+        0.20::numeric as w_balance,
+        'flat' as t_flat,
+        'up' as t_up,
+        'down' as t_down,
+        interval '6 months' as lookback_interval
+),
+
+monthly_income as (
+    select
+        t.applicant_id,
+        date_trunc(c.c_month, t.txn_date)::date as month,
+        sum(case when t.txn_type = c.c_credit and t.category in ('income', 'salary') then t.amount else 0 end) as income
+    from "loanlens_db"."public_intermediate"."int_transactions_categorized" t
+    cross join constants c
+    where t.txn_date >= date_trunc(c.c_month, current_date - c.lookback_interval)::date
     group by 1, 2
 ),
 
 monthly_emi as (
     select
-        applicant_id,
-        date_trunc('month', txn_date)::date as month,
-        sum(case when txn_type = 'debit' and category in ('emi', 'loan_obligation') then amount else 0 end) as emi
-    from "loanlens_db"."public_intermediate"."int_transactions_categorized"
-    where txn_date >= date_trunc('month', current_date - interval '6 months')::date
+        t.applicant_id,
+        date_trunc(c.c_month, t.txn_date)::date as month,
+        sum(case when t.txn_type = c.c_debit and t.category in ('emi', 'loan_obligation') then t.amount else 0 end) as emi
+    from "loanlens_db"."public_intermediate"."int_transactions_categorized" t
+    cross join constants c
+    where t.txn_date >= date_trunc(c.c_month, current_date - c.lookback_interval)::date
     group by 1, 2
 ),
 
 monthly_bounces as (
     select
-        applicant_id,
-        date_trunc('month', txn_date)::date as month,
-        count(*) filter (where category = 'bounce') as bounce_count
-    from "loanlens_db"."public_intermediate"."int_transactions_categorized"
-    where txn_date >= date_trunc('month', current_date - interval '6 months')::date
+        t.applicant_id,
+        date_trunc(c.c_month, t.txn_date)::date as month,
+        count(*) filter (where t.category = 'bounce') as bounce_count
+    from "loanlens_db"."public_intermediate"."int_transactions_categorized" t
+    cross join constants c
+    where t.txn_date >= date_trunc(c.c_month, current_date - c.lookback_interval)::date
     group by 1, 2
 ),
 
 monthly_balance as (
     select
-        raw_applicant_id as applicant_id,
-        date_trunc('month', txn_date)::date as month,
-        avg(balance_after) as avg_balance,
-        max(balance_after) - min(balance_after) as balance_swing
-    from "loanlens_db"."public_staging"."stg_transactions"
-    where txn_date >= date_trunc('month', current_date - interval '6 months')::date
+        t.raw_applicant_id as applicant_id,
+        date_trunc(c.c_month, t.txn_date)::date as month,
+        avg(t.balance_after) as avg_balance,
+        max(t.balance_after) - min(t.balance_after) as balance_swing
+    from "loanlens_db"."public_staging"."stg_transactions" t
+    cross join constants c
+    where t.txn_date >= date_trunc(c.c_month, current_date - c.lookback_interval)::date
     group by 1, 2
 ),
 
@@ -81,32 +99,34 @@ components as (
 
 scored as (
     select
-        applicant_id,
-        month,
+        s.applicant_id,
+        s.month,
         greatest(
             0,
             least(
                 100,
                 round(
-                    income_stability_score * 0.30
-                    + emi_burden_score * 0.25
-                    + bounce_score * 0.25
-                    + balance_score * 0.20,
+                    s.income_stability_score * c.w_income
+                    + s.emi_burden_score * c.w_emi
+                    + s.bounce_score * c.w_emi
+                    + s.balance_score * c.w_balance,
                     2
                 )
             )
         ) as score
-    from components
+    from components s
+    cross join constants c
 )
 
 select
-    applicant_id,
-    month,
-    score,
+    s.applicant_id,
+    s.month,
+    s.score,
     case
-        when lag(score) over (partition by applicant_id order by month) is null then 'flat'
-        when score > lag(score) over (partition by applicant_id order by month) then 'up'
-        when score < lag(score) over (partition by applicant_id order by month) then 'down'
-        else 'flat'
+        when lag(s.score) over (partition by s.applicant_id order by s.month) is null then c.t_flat
+        when s.score > lag(s.score) over (partition by s.applicant_id order by s.month) then c.t_up
+        when s.score < lag(s.score) over (partition by s.applicant_id order by s.month) then c.t_down
+        else c.t_flat
     end as trend_direction
-from scored
+from scored s
+cross join constants c
