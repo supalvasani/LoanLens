@@ -9,7 +9,12 @@ function getStepBg(done: boolean, active: boolean): string {
 }
 
 function getStepBorder(done: boolean, active: boolean): string {
-  const color = done ? 'var(--color-success)' : active ? 'var(--color-brand-primary)' : 'rgba(255,255,255,0.1)';
+  let color = 'rgba(255,255,255,0.1)';
+  if (done) {
+    color = 'var(--color-success)';
+  } else if (active) {
+    color = 'var(--color-brand-primary)';
+  }
   return `2px solid ${color}`;
 }
 
@@ -145,16 +150,11 @@ export default function ApplicantDashboard() {
       {/* Quick apply modal (simplified overlay) */}
       {showApply && (
         <div
-          role="button"
-          tabIndex={0}
           onClick={() => setShowApply(false)}
-          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') setShowApply(false); }}
           style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', zIndex: 100, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}
         >
           <div
-            role="presentation"
             onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
             className="card animate-slideup"
             style={{ width: '100%', maxWidth: 500, padding: 32 }}
           >
@@ -163,78 +163,67 @@ export default function ApplicantDashboard() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 20 }}>
               {LOAN_TYPES.map((lt) => (
                 <button key={lt.name} className="btn btn-ghost" style={{ flexDirection: 'column', height: 80, gap: 6, fontSize: 13 }}>
-                  <span style={{ fontSize: 22 }}>{lt.emoji}</span>
-                  <span style={{ fontWeight: 600 }}>{lt.name}</span>
-                  <span style={{ fontSize: 11, color: 'var(--color-text-muted)' }}>Up to {lt.max} · {lt.rate} p.a.</span>
+                  <span style={{ fontSize: 20 }}>{lt.emoji}</span>
+                  <span>{lt.name}</span>
                 </button>
               ))}
             </div>
-            <button className="btn btn-ghost btn-full" onClick={() => setShowApply(false)}>Cancel</button>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost btn-sm" onClick={() => setShowApply(false)}>Cancel</button>
+            </div>
           </div>
         </div>
       )}
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 16, marginBottom: 24 }}>
-        {/* Credit score */}
-        <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)', alignSelf: 'flex-start' }}>💳 Credit Score</div>
-          <CreditScoreRing score={CREDIT_SCORE} />
-          <div style={{ width: '100%', background: 'rgba(255,255,255,0.03)', borderRadius: 8, padding: '10px 14px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12 }}>
-              <span style={{ color: 'var(--color-text-muted)' }}>Max eligible loan</span>
-              <span style={{ fontWeight: 700, color: '#4ade80' }}>₹15,00,000</span>
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, marginTop: 6 }}>
-              <span style={{ color: 'var(--color-text-muted)' }}>Risk tier</span>
-              <span className="badge risk-low" style={{ fontSize: 10 }}>Low</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Active apps */}
-        <div className="card" style={{ gridColumn: 'span 2' }}>
-          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 16 }}>📋 My Applications</div>
+      {/* Main content grid */}
+      <div className="grid-2" style={{ marginBottom: 20 }}>
+        {/* Active applications list */}
+        <div className="card">
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 16 }}>📋 Active Applications</div>
           {MY_APPLICATIONS.map((app) => (
             <div key={app.id} style={{ marginBottom: 20, paddingBottom: 20, borderBottom: '1px solid var(--color-border-subtle)' }}>
-              <div className="flex items-center justify-between mb-3">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <code style={{ background: 'rgba(99,102,241,0.1)', color: '#818cf8', padding: '2px 6px', borderRadius: 4, fontSize: 12 }}>{app.id}</code>
-                    <span className={statusStyle[app.status].cls}>{statusStyle[app.status].icon} {app.statusLabel}</span>
-                  </div>
-                  <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--color-text-primary)' }}>{app.type} · {app.amount}</div>
-                  <div style={{ fontSize: 11, color: 'var(--color-text-muted)', marginTop: 2 }}>{app.purpose} · {app.submittedAt}</div>
+                  <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--color-text-primary)' }}>{app.type}</span>
+                  <span style={{ fontSize: 12, color: 'var(--color-text-muted)', marginLeft: 8 }}>({app.id})</span>
                 </div>
+                <span className={statusStyle[app.status]?.cls}>
+                  {statusStyle[app.status]?.icon} {app.statusLabel}
+                </span>
               </div>
-              {/* Step tracker */}
-              <div style={{ display: 'flex', alignItems: 'center', gap: 0 }}>
-                {app.steps.map((step, i) => (
-                  <div key={step.label} style={{ display: 'flex', alignItems: 'center', flex: 1 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flex: 1 }}>
-                      <div style={{
-                        width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        background: getStepBg(step.done, !!step.active),
-                        border: getStepBorder(step.done, !!step.active),
-                        fontSize: 12, color: '#fff',
-                        boxShadow: step.active ? '0 0 12px rgba(99,102,241,0.5)' : 'none',
-                        flexShrink: 0,
-                        animation: step.active ? 'pulse-glow 2s ease-in-out infinite' : 'none',
-                      }}>
-                        {getStepContent(step.done, !!step.active, i)}
-                      </div>
-                      <div style={{ fontSize: 9, color: getStepTextColor(step.done, !!step.active), marginTop: 4, textAlign: 'center', lineHeight: 1.2 }}>
-                        {step.label}
-                      </div>
+              <div style={{ fontSize: 13, color: 'var(--color-text-muted)', marginBottom: 12 }}>
+                Amount: <strong style={{ color: 'var(--color-text-primary)' }}>{app.amount}</strong> — {app.purpose}
+              </div>
+              {/* Progress bar steps */}
+              <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                {app.steps.map((st, i) => (
+                  <div key={st.label} style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <div style={{
+                      width: 24, height: 24, borderRadius: '50%',
+                      background: getStepBg(st.done, !!st.active),
+                      border: getStepBorder(st.done, !!st.active),
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: 11, fontWeight: 700, color: '#fff',
+                    }}>
+                      {getStepContent(st.done, !!st.active, i)}
                     </div>
-                    {i < app.steps.length - 1 && (
-                      <div style={{ height: 2, flex: 1, background: step.done ? 'var(--color-success)' : 'rgba(255,255,255,0.06)', marginBottom: 18, minWidth: 8 }} />
-                    )}
+                    <span style={{ fontSize: 10, color: getStepTextColor(st.done, !!st.active), textAlign: 'center' }}>
+                      {st.label}
+                    </span>
                   </div>
                 ))}
               </div>
             </div>
           ))}
           <button className="btn btn-primary btn-sm" onClick={() => setShowApply(true)}>➕ Apply for Another Loan</button>
+        </div>
+
+        {/* Credit score overview card */}
+        <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 20, alignSelf: 'flex-start' }}>
+            🎯 My Credit Score
+          </div>
+          <CreditScoreRing score={CREDIT_SCORE} />
         </div>
       </div>
 
@@ -243,21 +232,19 @@ export default function ApplicantDashboard() {
         <div style={{ fontSize: 14, fontWeight: 600, color: 'var(--color-text-primary)', marginBottom: 16 }}>🏦 Available Loan Products</div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
           {LOAN_TYPES.map((lt) => (
-            <div
+            <button
               key={lt.name}
-              role="button"
-              tabIndex={0}
-              className="card"
-              style={{ padding: '16px', cursor: 'pointer', border: '1px solid var(--color-border-subtle)' }}
+              type="button"
+              className="card text-left"
+              style={{ padding: '16px', cursor: 'pointer', border: '1px solid var(--color-border-subtle)', background: 'transparent', textAlign: 'left', display: 'block' }}
               onClick={() => setShowApply(true)}
-              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setShowApply(true); }}
             >
               <div style={{ fontSize: 26, marginBottom: 8 }}>{lt.emoji}</div>
               <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--color-text-primary)', marginBottom: 4 }}>{lt.name}</div>
               <div style={{ fontSize: 12, color: 'var(--color-text-muted)' }}>Up to {lt.max}</div>
               <div style={{ fontSize: 12, color: '#38bdf8', marginTop: 2 }}>{lt.rate} per annum</div>
-              <button className="btn btn-ghost btn-sm" style={{ marginTop: 10, width: '100%', fontSize: 12 }}>Apply →</button>
-            </div>
+              <span className="btn btn-ghost btn-sm" style={{ marginTop: 10, width: '100%', fontSize: 12, display: 'block', textAlign: 'center' }}>Apply →</span>
+            </button>
           ))}
         </div>
       </div>

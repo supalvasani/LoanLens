@@ -29,15 +29,27 @@ const STATUS_BADGE: Record<string, string> = {
   escalated:    'badge-warn',
 };
 
+function getActionModeFromMode(mode: 'approve' | 'reject' | 'escalate') {
+  if (mode === 'approve') return 'approved';
+  if (mode === 'reject') return 'rejected';
+  return 'escalated';
+}
+
+function getRiskBadgeClass(tier: string): string {
+  if (tier === 'high') return 'badge-bad';
+  if (tier === 'medium') return 'badge-warn';
+  return 'badge-ok';
+}
+
 // ── Inline action component ───────────────────────────────────────────────────
 
 function InlineActions({
   app,
   onDone,
-}: {
+}: Readonly<{
   app: AnalystQueueItem;
   onDone: (id: string, action: string) => void;
-}) {
+}>) {
   const [open, setOpen]     = useState(false);
   const [notes, setNotes]   = useState('');
   const [mode, setMode]     = useState<'approve' | 'reject' | 'escalate' | null>(null);
@@ -50,9 +62,7 @@ function InlineActions({
 
   async function submit() {
     if (!mode) return;
-    const actionMode = mode === 'approve' ? 'approved'
-      : mode === 'reject' ? 'rejected'
-      : 'escalated';
+    const actionMode = getActionModeFromMode(mode);
     const ok = await submitAnalyst(app.application_id, actionMode, notes || undefined);
     if (ok) onDone(app.application_id, mode);
   }
@@ -94,6 +104,7 @@ function InlineActions({
     <div
       style={{ minWidth: 280 }}
       onClick={e => e.stopPropagation()}
+      onKeyDown={e => e.stopPropagation()}
     >
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--t2)', marginBottom: 4, textTransform: 'capitalize' }}>
         {mode} — {app.application_id.slice(0, 8)}…
@@ -104,15 +115,14 @@ function InlineActions({
         placeholder={mode === 'escalate' ? 'Escalation reason (min 10 chars)…' : 'Optional notes…'}
         value={notes}
         onChange={e => setNotes(e.target.value)}
-        style={{ fontSize: 12, resize: 'none', fontFamily: 'var(--font)' }}
+        style={{ fontSize: 12, marginBottom: 6, resize: 'vertical' }}
       />
-      {err && <div style={{ fontSize: 11, color: 'var(--bad)', marginTop: 4 }}>{err}</div>}
-      <div style={{ display: 'flex', gap: 6, marginTop: 6 }}>
+      {err && <div className="text-danger text-xs mb-2">{err}</div>}
+      <div style={{ display: 'flex', gap: 6 }}>
         <button
           className="btn btn-primary btn-sm"
-          disabled={busy}
+          disabled={busy || (mode === 'escalate' && notes.length < 10)}
           onClick={submit}
-          style={{ fontSize: 12 }}
         >
           {busy ? <span className="spinner" /> : 'Confirm'}
         </button>
@@ -127,11 +137,13 @@ function InlineActions({
   );
 }
 
+// ── Queue table ───────────────────────────────────────────────────────────────
+
 interface QueueTableProps {
-  rows: AnalystQueueItem[];
-  emptyMsg: string;
-  navigate: (path: string) => void;
-  markDone: (id: string, action: string) => void;
+  readonly rows: AnalystQueueItem[];
+  readonly emptyMsg: string;
+  readonly navigate: (path: string) => void;
+  readonly markDone: (id: string, action: string) => void;
 }
 
 function QueueTable({ rows, emptyMsg, navigate, markDone }: QueueTableProps) {
@@ -175,7 +187,7 @@ function QueueTable({ rows, emptyMsg, navigate, markDone }: QueueTableProps) {
 
             {/* Loan type */}
             <td style={{ textTransform: 'capitalize', fontSize: 13 }}>
-              {app.loan_type.replace(/_/g, ' ')}
+              {app.loan_type.replaceAll('_', ' ')}
             </td>
 
             {/* Amount */}
@@ -200,7 +212,7 @@ function QueueTable({ rows, emptyMsg, navigate, markDone }: QueueTableProps) {
             {/* Risk */}
             <td>
               {app.risk_tier ? (
-                <span className={`badge ${app.risk_tier === 'high' ? 'badge-bad' : app.risk_tier === 'medium' ? 'badge-warn' : 'badge-ok'}`}>
+                <span className={`badge ${getRiskBadgeClass(app.risk_tier)}`}>
                   {app.risk_tier}
                 </span>
               ) : <span style={{ color: 'var(--t3)' }}>—</span>}
@@ -209,7 +221,7 @@ function QueueTable({ rows, emptyMsg, navigate, markDone }: QueueTableProps) {
             {/* Status */}
             <td>
               <span className={`badge ${STATUS_BADGE[app.status] ?? ''}`}>
-                {app.status.replace(/_/g, ' ')}
+                {app.status.replaceAll('_', ' ')}
               </span>
             </td>
 

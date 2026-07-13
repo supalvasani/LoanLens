@@ -78,9 +78,15 @@ function MetricRow({ label, value, note, alert }: Readonly<MetricRowProps>) {
   );
 }
 
+function getScoreGaugeLabel(score: number): string {
+  if (score > 65) return 'Approvable';
+  if (score >= 45) return 'Grey Zone — Escalate';
+  return 'Rejectable';
+}
+
 function ScoreGauge({ score }: Readonly<{ score: number }>) {
   const color = scoreColor(score);
-  const label = score > 65 ? 'Approvable' : score >= 45 ? 'Grey Zone — Escalate' : 'Rejectable';
+  const label = getScoreGaugeLabel(score);
   return (
     <div style={{ textAlign: 'center', padding: '12px 0' }}>
       <div style={{ fontSize: 64, fontWeight: 900, color, letterSpacing: '-0.05em', lineHeight: 1 }}>
@@ -98,6 +104,24 @@ function ScoreGauge({ score }: Readonly<{ score: number }>) {
       </div>
     </div>
   );
+}
+
+function getScoreBarColor(value: number): string {
+  if (value >= 70) return '#2E7D32';
+  if (value >= 45) return '#d97706';
+  return '#C62828';
+}
+
+function getApproveButtonTitle(canApprove: boolean, hasFraud: boolean, score: number | null): string {
+  if (canApprove) return 'Approve this application';
+  if (hasFraud) return 'Cannot approve: fraud flags present';
+  return `Score ${score?.toFixed(1)} ≤ 65 — must escalate`;
+}
+
+function getRejectButtonTitle(canReject: boolean, hasFraud: boolean, score: number | null): string {
+  if (canReject) return 'Reject this application';
+  if (hasFraud) return 'Cannot reject: fraud flags present';
+  return `Score ${score?.toFixed(1)} ≥ 45 — must escalate`;
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
@@ -123,7 +147,7 @@ export default function ApplicationDetail() {
   if (loading) return (
     <DashboardShell title="Loading…" subtitle="Fetching credit report">
       <div style={{ textAlign: 'center', padding: 80, color: 'var(--t3)' }}>
-        <span className="spinner" style={{ fontSize: 20, marginRight: 8 }} />
+        <span className="spinner" style={{ fontSize: 20, marginRight: 8 }} />{' '}
         Loading application…
       </div>
     </DashboardShell>
@@ -228,8 +252,8 @@ export default function ApplicationDetail() {
             ⚠ Fraud Signals Detected — Escalation Required
           </div>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-            {fraud_flags.map((f, i) => (
-              <div key={i} style={{
+            {fraud_flags.map((f) => (
+              <div key={f.flag_type} style={{
                 padding: '6px 12px', background: '#fff',
                 border: '1px solid rgba(198,40,40,.2)', borderRadius: 'var(--r-sm)',
                 fontSize: 12,
@@ -296,10 +320,10 @@ export default function ApplicationDetail() {
                   formatter={(v: unknown) => [`${v}/100`, 'Score']}
                 />
                 <Bar dataKey="value" radius={[3, 3, 0, 0]}>
-                  {scoreBarData.map((entry, index) => (
+                  {scoreBarData.map((entry) => (
                     <Cell
-                      key={index}
-                      fill={entry.value >= 70 ? '#2E7D32' : entry.value >= 45 ? '#d97706' : '#C62828'}
+                      key={entry.name}
+                      fill={getScoreBarColor(entry.value)}
                     />
                   ))}
                 </Bar>
@@ -401,8 +425,8 @@ export default function ApplicationDetail() {
                   label={({ name, percent }) => `${name} ${(percent ? percent * 100 : 0).toFixed(0)}%`}
                   labelLine={false}
                 >
-                  {pieData.map((_, index) => (
-                    <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                  {pieData.map((entry) => (
+                    <Cell key={entry.name} fill={PIE_COLORS[scoreBarData.findIndex(s => s.name === entry.name) % PIE_COLORS.length] || '#4F81C7'} />
                   ))}
                 </Pie>
                 <Tooltip
@@ -530,7 +554,7 @@ export default function ApplicationDetail() {
                 id="btn-approve"
                 className="btn btn-primary"
                 disabled={submitting || !canApprove}
-                title={!canApprove ? (hasFraud ? 'Cannot approve: fraud flags present' : `Score ${score?.toFixed(1)} ≤ 65 — must escalate`) : 'Approve this application'}
+                title={getApproveButtonTitle(canApprove, hasFraud, score)}
                 onClick={() => handleDecision('approved')}
                 style={{ background: canApprove ? '#2E7D32' : undefined, borderColor: canApprove ? '#2E7D32' : undefined }}
               >
@@ -542,7 +566,7 @@ export default function ApplicationDetail() {
                 id="btn-reject"
                 className="btn btn-danger"
                 disabled={submitting || !canReject}
-                title={!canReject ? (hasFraud ? 'Cannot reject: fraud flags present' : `Score ${score?.toFixed(1)} ≥ 45 — must escalate`) : 'Reject this application'}
+                title={getRejectButtonTitle(canReject, hasFraud, score)}
                 onClick={() => handleDecision('rejected')}
               >
                 {submitting ? <span className="spinner" /> : '✗'} Reject

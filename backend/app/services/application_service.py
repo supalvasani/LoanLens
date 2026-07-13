@@ -233,6 +233,24 @@ class ApplicationService:
         )
         return [LoanApplicationResponse.model_validate(a) for a in applications]
 
+    @staticmethod
+    def _queue_item_matches(
+        item: AnalystQueueItem,
+        score_min: float | None,
+        score_max: float | None,
+        risk_segment: str | None,
+        recommendation: str | None,
+    ) -> bool:
+        if score_min is not None and (item.score is None or item.score < score_min):
+            return False
+        if score_max is not None and (item.score is None or item.score > score_max):
+            return False
+        if risk_segment is not None and (item.risk_tier or "").lower() != risk_segment.lower():
+            return False
+        if recommendation is not None and (item.recommendation or "").lower() != recommendation.lower():
+            return False
+        return True
+
     def _filter_queue_items(
         self,
         items: list[AnalystQueueItem],
@@ -241,18 +259,10 @@ class ApplicationService:
         risk_segment: str | None,
         recommendation: str | None,
     ) -> list[AnalystQueueItem]:
-        result: list[AnalystQueueItem] = []
-        for item in items:
-            if score_min is not None and (item.score is None or item.score < score_min):
-                continue
-            if score_max is not None and (item.score is None or item.score > score_max):
-                continue
-            if risk_segment is not None and (item.risk_tier or "").lower() != risk_segment.lower():
-                continue
-            if recommendation is not None and (item.recommendation or "").lower() != recommendation.lower():
-                continue
-            result.append(item)
-        return result
+        return [
+            item for item in items
+            if self._queue_item_matches(item, score_min, score_max, risk_segment, recommendation)
+        ]
 
     def _sort_queue_items(self, items: list[AnalystQueueItem], sort_by: str, sort_dir: str) -> None:
         reverse = sort_dir.lower() == "desc"

@@ -114,6 +114,41 @@ def _normalise_txn_type(raw: str) -> str | None:
 
 # ── Canonical resolution ──────────────────────────────────────────────────────
 
+# ── Canonical resolution ──────────────────────────────────────────────────────
+
+def _extract_amount_and_type(row, mapping: ColumnMapping) -> tuple[Decimal | None, str | None, bool]:
+    """Returns (amount, txn_type, is_empty_row)."""
+    if mapping.amount_pattern == "flagged":
+        raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
+        amount = _parse_amount(raw_amt)
+        raw_type = str(row.get(mapping.txn_type_col, "") or "")
+        return amount, _normalise_txn_type(raw_type), False
+
+    if mapping.amount_pattern == "split":
+        debit_col, credit_col = mapping.amount_cols[0], mapping.amount_cols[1]
+        raw_debit = str(row.get(debit_col, "") or "").strip().replace(",", "")
+        raw_credit = str(row.get(credit_col, "") or "").strip().replace(",", "")
+        debit_val = _parse_amount(raw_debit)
+        credit_val = _parse_amount(raw_credit)
+        if (debit_val is None or debit_val == Decimal("0")) and \
+           (credit_val is None or credit_val == Decimal("0")):
+            return None, None, True
+        if credit_val and credit_val > 0:
+            return credit_val, "credit", False
+        return debit_val, "debit", False
+
+    if mapping.amount_pattern == "signed":
+        raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
+        clean = raw_amt.strip().replace(",", "")
+        try:
+            signed = Decimal(clean)
+            return abs(signed), ("credit" if signed >= 0 else "debit"), False
+        except InvalidOperation:
+            pass
+
+    return None, None, False
+
+
 def _resolve_single_canonical_row(
     row,
     mapping: ColumnMapping,
@@ -128,40 +163,9 @@ def _resolve_single_canonical_row(
         return None
 
     # ── amount + txn_type ─────────────────────────────────────────────────
-    amount: Decimal | None = None
-    txn_type: str | None = None
-
-    if mapping.amount_pattern == "flagged":
-        raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
-        amount = _parse_amount(raw_amt)
-        raw_type = str(row.get(mapping.txn_type_col, "") or "")
-        txn_type = _normalise_txn_type(raw_type)
-
-    elif mapping.amount_pattern == "split":
-        debit_col, credit_col = mapping.amount_cols[0], mapping.amount_cols[1]
-        raw_debit = str(row.get(debit_col, "") or "").strip().replace(",", "")
-        raw_credit = str(row.get(credit_col, "") or "").strip().replace(",", "")
-        debit_val = _parse_amount(raw_debit)
-        credit_val = _parse_amount(raw_credit)
-        # Skip rows with no value in either column (e.g. header summary rows)
-        if (debit_val is None or debit_val == Decimal("0")) and \
-           (credit_val is None or credit_val == Decimal("0")):
-            return {}
-        if credit_val and credit_val > 0:
-            amount, txn_type = credit_val, "credit"
-        else:
-            amount, txn_type = debit_val, "debit"
-
-    elif mapping.amount_pattern == "signed":
-        raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
-        clean = raw_amt.strip().replace(",", "")
-        try:
-            signed = Decimal(clean)
-            amount = abs(signed)
-            txn_type = "credit" if signed >= 0 else "debit"
-        except InvalidOperation:
-            pass
-
+    amount, txn_type, is_empty = _extract_amount_and_type(row, mapping)
+    if is_empty:
+        return {}
     if amount is None or txn_type is None:
         return None
 
@@ -252,6 +256,30 @@ def _parse_dataframe(text_content: str, fhash: str) -> tuple[pd.DataFrame | None
         )
 
 
+def _get_mapping_and_source(
+    df_raw: pd.DataFrame,
+    detected_headers: list[str],
+    registry_lookup: Callable[[frozenset[str]], dict | None],
+) -> tuple[ColumnMapping, str]:
+    header_key = _headers_to_key(detected_headers)
+    registry_entry = registry_lookup(header_key)
+
+    if registry_entry is not None:
+        cmap = registry_entry["column_map"]
+        mapping = ColumnMapping(
+            txn_date_col=cmap.get("txn_date_col"),
+            amount_cols=cmap.get("amount_cols", []),
+            txn_type_col=cmap.get("txn_type_col"),
+            description_cols=cmap.get("description_cols", []),
+            balance_col=cmap.get("balance_col"),
+            amount_pattern=registry_entry.get("amount_pattern", "signed"),
+            confidence=1.0,
+        )
+        return mapping, "registry"
+
+    return classify_columns(df_raw), "heuristic"
+
+
 # ── Main pipeline ─────────────────────────────────────────────────────────────
 
 def ingest_statement(
@@ -261,45 +289,21 @@ def ingest_statement(
     file_hash_lookup: Callable[[str, str], bool],
     registry_lookup: Callable[[frozenset[str]], dict | None],
 ) -> IngestResult:
-    """Full ingestion pipeline for a single bank statement file.
-
-    Parameters
-    ----------
-    raw_bytes:
-        Raw file bytes exactly as received (used for SHA-256 + parsing).
-    applicant_id:
-        UUID string of the raw_applicants row for this upload.
-    file_hash_lookup:
-        Callable(applicant_id, sha256_hex) → bool.
-        Returns True if this file has already been ingested for this applicant.
-    registry_lookup:
-        Callable(frozenset_of_lowered_headers) → dict | None.
-        Returns a registry row dict with 'column_map' and 'amount_pattern' keys,
-        or None on cache miss. Removing this callable (always returning None)
-        must not break ingestion — it just forces the heuristic path every time.
-
-    Returns
-    -------
-    IngestResult with status, canonical rows (if successful), and metadata.
-    """
-    # ── 1. File-level dedup ───────────────────────────────────────────────────
+    """Full ingestion pipeline for a single bank statement file."""
     fhash = file_hash(raw_bytes)
     if file_hash_lookup(applicant_id, fhash):
         return IngestResult(status=STATUS_DUPLICATE_FILE, file_hash=fhash)
 
-    # ── 2. Decode ─────────────────────────────────────────────────────────────
     text_content, err_result = _decode_bytes(raw_bytes, fhash)
     if err_result:
         return err_result
 
-    # ── 3. Parse DataFrame ────────────────────────────────────────────────────
     df_raw, err_result = _parse_dataframe(text_content, fhash)
     if err_result:
         return err_result
 
     detected_headers = list(df_raw.columns)
 
-    # ── 4. Minimum row check ──────────────────────────────────────────────────
     if len(df_raw) < MIN_DATA_ROWS:
         return IngestResult(
             status=STATUS_TOO_FEW_ROWS,
@@ -307,35 +311,9 @@ def ingest_statement(
             detected_headers=detected_headers,
         )
 
-    # Sample rows for review queue (up to 5)
     sample_rows = df_raw.head(5).to_dict(orient="records")
+    mapping, source_prefix = _get_mapping_and_source(df_raw, detected_headers, registry_lookup)
 
-    # ── 5. Format registry fast path ──────────────────────────────────────────
-    header_key = _headers_to_key(detected_headers)
-    registry_entry = registry_lookup(header_key)
-
-    mapping: ColumnMapping | None = None
-    source_prefix = "heuristic"
-
-    if registry_entry is not None:
-        # Registry hit — reconstruct ColumnMapping from stored column_map
-        cmap = registry_entry["column_map"]
-        mapping = ColumnMapping(
-            txn_date_col=cmap.get("txn_date_col"),
-            amount_cols=cmap.get("amount_cols", []),
-            txn_type_col=cmap.get("txn_type_col"),
-            description_cols=cmap.get("description_cols", []),
-            balance_col=cmap.get("balance_col"),
-            amount_pattern=registry_entry.get("amount_pattern", "signed"),
-            confidence=1.0,  # Registry entries are human-confirmed
-        )
-        source_prefix = "registry"
-
-    # ── 6. Heuristic classification (if no registry hit) ─────────────────────
-    if mapping is None:
-        mapping = classify_columns(df_raw)
-
-    # ── 7. Sanity gate: must have at least date + amount ─────────────────────
     if not mapping.txn_date_col or not mapping.amount_cols:
         return IngestResult(
             status=STATUS_NOT_A_BANK_STATEMENT,
@@ -345,7 +323,6 @@ def ingest_statement(
             error_detail="Could not identify date or amount columns.",
         )
 
-    # ── 8. Confidence gate (heuristic path only) ──────────────────────────────
     if source_prefix == "heuristic" and mapping.confidence < MIN_CONFIDENCE:
         return IngestResult(
             status=STATUS_LOW_CONFIDENCE,
@@ -359,7 +336,6 @@ def ingest_statement(
             ),
         )
 
-    # ── 9. Resolve canonical rows ─────────────────────────────────────────────
     source_format = f"{source_prefix}:{mapping.amount_pattern}"
     canonical_rows, unparseable = _resolve_canonical_rows(
         df_raw, mapping, source_format, fhash

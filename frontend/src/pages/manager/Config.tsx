@@ -72,7 +72,7 @@ export default function ManagerConfig() {
     }
 
     const confirmed = window.confirm(
-      `Are you sure you want to update thresholds for ${config.loan_type.replace(/_/g, ' ').toUpperCase()}?\n\n` +
+      `Are you sure you want to update thresholds for ${config.loan_type.replaceAll('_', ' ').toUpperCase()}?\n\n` +
       `New Thresholds:\n` +
       `- Manager Threshold: ₹${editForm.manager_threshold_amount.toLocaleString('en-IN')}\n` +
       `- Auto-Approve: ${editForm.approve_threshold}\n` +
@@ -84,7 +84,7 @@ export default function ManagerConfig() {
 
     try {
       await managerService.updateConfig(config.loan_type, editForm);
-      setSuccessMsg(`Thresholds for ${config.loan_type.replace(/_/g, ' ')} updated successfully!`);
+      setSuccessMsg(`Thresholds for ${config.loan_type.replaceAll('_', ' ')} updated successfully!`);
       setEditingRowId(null);
       setEditForm(null);
       
@@ -167,7 +167,7 @@ export default function ManagerConfig() {
                     return (
                       <tr key={config.loan_type_id}>
                         <td style={{ fontWeight: 600, textTransform: 'capitalize' }}>
-                          {config.loan_type.replace(/_/g, ' ')}
+                          {config.loan_type.replaceAll('_', ' ')}
                         </td>
                         
                         {/* Manager Threshold */}

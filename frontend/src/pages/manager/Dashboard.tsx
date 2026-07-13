@@ -4,6 +4,13 @@ import { DashboardShell } from '../../components/DashboardShell';
 import { managerService } from '../../services/managerService';
 import type { ManagerQueueItem, PortfolioData } from '../../services/managerService';
 
+function getScoreColor(score: number | null): string {
+  if (score === null) return 'var(--t3)';
+  if (score >= 70) return 'var(--ok)';
+  if (score >= 45) return 'var(--warn)';
+  return 'var(--bad)';
+}
+
 export default function ManagerDashboard() {
   const navigate = useNavigate();
   const [queue, setQueue] = useState<ManagerQueueItem[]>([]);
@@ -52,7 +59,7 @@ export default function ManagerDashboard() {
   // 81-100 -> midpoint 90
   // Average score = sum(midpoint * count) / sum(count)
   let calculatedAvgScore = 0;
-  if (portfolio && portfolio.score_distribution) {
+  if (portfolio?.score_distribution) {
     let totalScore = 0;
     let totalCount = 0;
     const midpoints: Record<string, number> = {
@@ -217,11 +224,6 @@ export default function ManagerDashboard() {
                 </tr>
               ) : (
                 recentEscalations.map((app) => {
-                  const score = app.score;
-                  const scoreColor = score !== null
-                    ? (score >= 70 ? 'var(--ok)' : score >= 45 ? 'var(--warn)' : 'var(--bad)')
-                    : 'var(--t3)';
-
                   const hasFraud = app.fraud_flags && app.fraud_flags.length > 0;
 
                   return (
@@ -234,17 +236,17 @@ export default function ManagerDashboard() {
                         {app.applicant_name || 'Unknown Applicant'}
                       </td>
                       <td style={{ textTransform: 'capitalize' }}>
-                        {app.loan_type.replace(/_/g, ' ')}
+                        {app.loan_type.replaceAll('_', ' ')}
                       </td>
                       <td>₹{Number(app.amount_requested).toLocaleString('en-IN')}</td>
-                      <td style={{ fontWeight: 600, color: scoreColor }}>
-                        {score !== null ? score : '—'}
+                      <td style={{ fontWeight: 600, color: getScoreColor(app.score) }}>
+                        {app.score !== null ? app.score : '—'}
                       </td>
                       <td>
                         {hasFraud ? (
                           <span className="badge badge-bad">Active Flag</span>
                         ) : (
-                          <span className="badge badge-ok">Clear</span>
+                          <span style={{ color: 'var(--t3)' }}>—</span>
                         )}
                       </td>
                       <td

@@ -78,10 +78,7 @@ export default function ManagerDashboard() {
             {ESCALATIONS.map((esc) => (
               <div
                 key={esc.id}
-                role="button"
-                tabIndex={0}
                 onClick={() => setSelectedApp(selectedApp === esc.id ? null : esc.id)}
-                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setSelectedApp(selectedApp === esc.id ? null : esc.id); }}
                 style={{
                   padding: '12px 20px',
                   borderBottom: '1px solid var(--color-border-subtle)',
@@ -109,11 +106,9 @@ export default function ManagerDashboard() {
                 </div>
                 {selectedApp === esc.id && (
                   <div
-                    role="presentation"
                     className="flex gap-2"
                     style={{ marginTop: 10 }}
                     onClick={(e) => e.stopPropagation()}
-                    onKeyDown={(e) => e.stopPropagation()}
                   >
                     <button className="btn btn-primary btn-sm" style={{ flex: 1 }}>✅ Approve</button>
                     <button className="btn btn-danger btn-sm" style={{ flex: 1 }}>❌ Reject</button>

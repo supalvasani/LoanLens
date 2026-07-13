@@ -41,7 +41,7 @@ const DECISION_STYLE: Record<string, { bg: string; color: string; label: string 
   ineligible: { bg: 'rgba(239,68,68,.1)',  color: '#dc2626', label: 'Not Eligible' },
 };
 
-function EligibilityCard({ item, onApply }: { item: EligibilityItem; onApply: () => void }) {
+function EligibilityCard({ item, onApply }: Readonly<{ item: EligibilityItem; onApply: () => void }>) {
   const decision = item.decision ?? 'ineligible';
   const ds = DECISION_STYLE[decision] ?? DECISION_STYLE.ineligible;
   const icon = LOAN_ICONS[item.loan_type] ?? (

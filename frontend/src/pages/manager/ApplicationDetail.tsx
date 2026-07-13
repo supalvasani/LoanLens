@@ -17,7 +17,7 @@ function scoreColor(score: number | null): string {
 
 const PIE_COLORS = ['#4F81C7', '#2E7D32', '#d97706', '#C62828', '#7C3AED', '#0891b2'];
 
-function SectionHeader({ children }: { children: React.ReactNode }) {
+function SectionHeader({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <div style={{
       fontSize: 11, fontWeight: 700, letterSpacing: '.08em',
@@ -28,9 +28,9 @@ function SectionHeader({ children }: { children: React.ReactNode }) {
   );
 }
 
-function MetricRow({ label, value, note, alert }: {
+function MetricRow({ label, value, note, alert }: Readonly<{
   label: string; value: string | number; note?: string; alert?: boolean;
-}) {
+}>) {
   return (
     <div style={{
       display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -45,9 +45,15 @@ function MetricRow({ label, value, note, alert }: {
   );
 }
 
-function ScoreGauge({ score }: { score: number }) {
+function getManagerScoreGaugeLabel(score: number): string {
+  if (score > 65) return 'High Score';
+  if (score >= 45) return 'Grey Zone';
+  return 'Low Score';
+}
+
+function ScoreGauge({ score }: Readonly<{ score: number }>) {
   const color = scoreColor(score);
-  const label = score > 65 ? 'High Score' : score >= 45 ? 'Grey Zone' : 'Low Score';
+  const label = getManagerScoreGaugeLabel(score);
   return (
     <div style={{ textAlign: 'center', padding: '12px 0' }}>
       <div style={{ fontSize: 64, fontWeight: 900, color, letterSpacing: '-0.05em', lineHeight: 1 }}>
@@ -65,6 +71,18 @@ function ScoreGauge({ score }: { score: number }) {
       </div>
     </div>
   );
+}
+
+function getRiskSegmentColor(segment?: string | null): string {
+  if (segment === 'high') return 'var(--bad)';
+  if (segment === 'medium') return '#d97706';
+  return 'var(--ok)';
+}
+
+function getDecisionHistoryBadgeClass(decision: string): string {
+  if (decision === 'approved') return 'badge-ok';
+  if (decision === 'rejected') return 'badge-bad';
+  return 'badge-warn';
 }
 
 export default function ManagerApplicationDetail() {
@@ -98,12 +116,10 @@ export default function ManagerApplicationDetail() {
         })
         .catch((err) => {
           if (!active) return;
-          console.error(err);
-          setError('Failed to load application details or you do not have permission.');
+          setError(err.response?.data?.detail || 'Failed to load application');
         })
         .finally(() => {
-          if (!active) return;
-          setLoading(false);
+          if (active) setLoading(false);
         });
     });
     return () => { active = false; };
@@ -113,13 +129,15 @@ export default function ManagerApplicationDetail() {
     if (!id || !notes.trim()) return;
     setSubmitting(true);
     setDecisionError(null);
+
     managerService.submitDecision(id, { decision, notes })
       .then(() => {
         setActionDone(decision);
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         console.error(err);
-        setDecisionError(err.response?.data?.detail || 'Failed to submit decision.');
+        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+        setDecisionError(detail || 'Failed to submit decision.');
       })
       .finally(() => setSubmitting(false));
   }
@@ -127,7 +145,7 @@ export default function ManagerApplicationDetail() {
   if (loading) return (
     <DashboardShell title="Loading…" subtitle="Fetching credit report">
       <div style={{ textAlign: 'center', padding: 80, color: 'var(--t3)' }}>
-        <span className="spinner" style={{ fontSize: 20, marginRight: 8 }} />
+        <span className="spinner" style={{ fontSize: 20, marginRight: 8 }} />{' '}
         Loading application…
       </div>
     </DashboardShell>
@@ -188,7 +206,7 @@ export default function ManagerApplicationDetail() {
   const pieData = breakdownRaw
     ? Object.entries(breakdownRaw)
         .filter(([, v]) => typeof v === 'number' && v > 0)
-        .map(([k, v]) => ({ name: k.replace(/_/g, ' '), value: Number(v) }))
+        .map(([k, v]) => ({ name: k.replaceAll('_', ' '), value: Number(v) }))
     : [];
 
   const statusBadge: Record<string, string> = {
@@ -198,7 +216,7 @@ export default function ManagerApplicationDetail() {
 
   return (
     <DashboardShell
-      title={`Review: ${app.loan_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}`}
+      title={`Review: ${app.loan_type.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}`}
       subtitle={`App ID: ${app.application_id.slice(0, 8)}… · Submitted ${new Date(app.submitted_at).toLocaleDateString('en-IN')}`}
       actions={
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
@@ -206,7 +224,7 @@ export default function ManagerApplicationDetail() {
             <span className="badge badge-bad" style={{ gap: 4 }}>⚠ Fraud Flagged</span>
           )}
           <span className={`badge ${statusBadge[app.status] ?? ''}`}>
-            {app.status.replace(/_/g, ' ')}
+            {app.status.replaceAll('_', ' ')}
           </span>
           <button className="btn btn-ghost btn-sm" onClick={() => navigate('/manager/queue')}>
             ← Queue
@@ -243,14 +261,14 @@ export default function ManagerApplicationDetail() {
               ⚠ Active Fraud Flags
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              {fraud_flags.map((f, i) => (
-                <div key={i} style={{
+              {fraud_flags.map((f) => (
+                <div key={f.flag_type} style={{
                   padding: '10px 14px', background: 'var(--bad-b)',
                   border: '1px solid rgba(198,40,40,.2)', borderRadius: 'var(--r-md)',
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
                 }}>
                   <div>
-                    <strong>{f.flag_type.replace(/_/g, ' ')}</strong>
+                    <strong>{f.flag_type.replaceAll('_', ' ')}</strong>
                     <div style={{ fontSize: 12, color: 'var(--ink-soft)', marginTop: 2 }}>{f.flag_detail}</div>
                   </div>
                   <span className="badge badge-bad">{f.severity.toUpperCase()}</span>
@@ -265,11 +283,11 @@ export default function ManagerApplicationDetail() {
           {/* Application details */}
           <div className="card">
             <SectionHeader>Application Details</SectionHeader>
-            <MetricRow label="Loan Type"        value={app.loan_type.replace(/_/g, ' ')} />
+            <MetricRow label="Loan Type"        value={app.loan_type.replaceAll('_', ' ')} />
             <MetricRow label="Amount Requested" value={`₹${Number(app.amount_requested).toLocaleString('en-IN')}`} />
             <MetricRow label="Purpose"          value={app.purpose} />
-            <MetricRow label="Current Status"   value={app.status.replace(/_/g, ' ')} />
-            <MetricRow label="Risk Tier"        value={risk_tier?.replace(/_/g, ' ') ?? '—'} />
+            <MetricRow label="Current Status"   value={app.status.replaceAll('_', ' ')} />
+            <MetricRow label="Risk Tier"        value={risk_tier?.replaceAll('_', ' ') ?? '—'} />
             <MetricRow label="Submitted"        value={new Date(app.submitted_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })} />
           </div>
 
@@ -307,9 +325,9 @@ export default function ManagerApplicationDetail() {
                     formatter={(v: unknown) => [`${v}/100`, 'Score']}
                   />
                   <Bar dataKey="value" radius={[3, 3, 0, 0]}>
-                    {scoreBarData.map((entry, index) => (
+                    {scoreBarData.map((entry) => (
                       <Cell
-                        key={index}
+                        key={entry.name}
                         fill={entry.value >= 70 ? '#2E7D32' : entry.value >= 45 ? '#d97706' : '#C62828'}
                       />
                     ))}
@@ -382,11 +400,9 @@ export default function ManagerApplicationDetail() {
                 <div style={{ marginTop: 12 }}>
                   <span style={{
                     fontSize: 11, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '.06em',
-                    color: underwriter_report.risk_segment === 'high' ? 'var(--bad)'
-                         : underwriter_report.risk_segment === 'medium' ? '#d97706'
-                         : 'var(--ok)',
+                    color: getRiskSegmentColor(underwriter_report.risk_segment),
                   }}>
-                    ● {underwriter_report.risk_segment?.replace(/_/g, ' ') ?? 'N/A'} Risk
+                    ● {underwriter_report.risk_segment?.replaceAll('_', ' ') ?? 'N/A'} Risk
                   </span>
                 </div>
               </>
@@ -412,8 +428,8 @@ export default function ManagerApplicationDetail() {
                     label={({ name, percent }) => `${name} ${(percent ? percent * 100 : 0).toFixed(0)}%`}
                     labelLine={false}
                   >
-                    {pieData.map((_, index) => (
-                      <Cell key={index} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                    {pieData.map((entry) => (
+                      <Cell key={entry.name} fill={PIE_COLORS[scoreBarData.findIndex(s => s.name === entry.name) % PIE_COLORS.length] || '#4F81C7'} />
                     ))}
                   </Pie>
                   <Tooltip
@@ -447,7 +463,7 @@ export default function ManagerApplicationDetail() {
               <tbody>
                 {eligibility.map(e => (
                   <tr key={e.loan_type}>
-                    <td style={{ textTransform: 'capitalize' }}>{e.loan_type.replace(/_/g, ' ')}</td>
+                    <td style={{ textTransform: 'capitalize' }}>{e.loan_type.replaceAll('_', ' ')}</td>
                     <td>₹{Number(e.eligible_amount ?? 0).toLocaleString('en-IN')}</td>
                     <td>₹{Number(e.applied_amount ?? 0).toLocaleString('en-IN')}</td>
                     <td style={{ color: Number(e.gap_amount) > 0 ? 'var(--bad)' : 'var(--ok)' }}>
@@ -482,7 +498,7 @@ export default function ManagerApplicationDetail() {
                 padding: '8px 0', borderBottom: '1px solid var(--border-s)',
               }}>
                 <div>
-                  <span className={`badge ${d.decision === 'approved' ? 'badge-ok' : d.decision === 'rejected' ? 'badge-bad' : 'badge-warn'}`}>
+                  <span className={`badge ${getDecisionHistoryBadgeClass(d.decision)}`}>
                     {d.decision}
                   </span>
                   {d.notes && <span style={{ fontSize: 12, color: 'var(--t2)', marginLeft: 10 }}>{d.notes}</span>}

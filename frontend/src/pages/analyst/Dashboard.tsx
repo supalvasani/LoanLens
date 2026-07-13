@@ -45,13 +45,98 @@ function SortIcon({
   field,
   sortBy,
   sortDir,
-}: {
+}: Readonly<{
   field: string;
   sortBy: string | undefined;
   sortDir: 'asc' | 'desc';
-}) {
+}>) {
   if (sortBy !== field) return <span style={{ color: 'var(--t3)', marginLeft: 4 }}>⇅</span>;
   return <span style={{ color: 'var(--ink)', marginLeft: 4 }}>{sortDir === 'asc' ? '↑' : '↓'}</span>;
+}
+
+function renderQueueTableBody(
+  loading: boolean,
+  apps: AnalystQueueItem[],
+  navigate: (path: string) => void
+) {
+  if (loading) {
+    return (
+      <tr><td colSpan={8} style={{ textAlign: 'center', padding: 48, color: 'var(--t3)' }}>
+        <span className="spinner" style={{ marginRight: 8 }} />Loading queue…
+      </td></tr>
+    );
+  }
+  if (apps.length === 0) {
+    return (
+      <tr><td colSpan={8} style={{ textAlign: 'center', padding: 48, color: 'var(--t3)' }}>
+        No applications match the current filters.
+      </td></tr>
+    );
+  }
+  return apps.map(app => {
+    const rk = riskLabel(app.risk_tier);
+    const rc = recPill(app.recommendation);
+    return (
+      <tr
+        key={app.application_id}
+        style={{ cursor: 'pointer' }}
+        onClick={() => navigate(`/analyst/applications/${app.application_id}`)}
+      >
+        <td>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            {app.has_fraud_flags && (
+              <span title="Fraud flagged" style={{ color: 'var(--bad)', fontSize: 13 }}>⚠</span>
+            )}
+            <div>
+              <div style={{ fontWeight: 600, fontSize: 13 }}>
+                {app.applicant_name ?? `…${app.application_id.slice(-6)}`}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--t3)', fontFamily: 'monospace' }}>
+                {app.application_id.slice(0, 8)}…
+              </div>
+            </div>
+          </div>
+        </td>
+        <td style={{ textTransform: 'capitalize' }}>
+          {app.loan_type.replaceAll('_', ' ')}
+        </td>
+        <td style={{ fontVariantNumeric: 'tabular-nums' }}>
+          ₹{Number(app.amount_requested).toLocaleString('en-IN')}
+        </td>
+        <td>
+          {app.score !== null ? (
+            <span style={{
+              display: 'inline-block',
+              minWidth: 44,
+              textAlign: 'center',
+              padding: '3px 10px',
+              borderRadius: 4,
+              fontWeight: 700,
+              fontSize: 13,
+              background: scoreBg(app.score),
+              color: scoreColor(app.score),
+            }}>
+              {app.score.toFixed(0)}
+            </span>
+          ) : '—'}
+        </td>
+        <td>
+          <span className={`badge ${rk.cls}`}>
+            {rk.label}
+          </span>
+        </td>
+        <td>
+          <span className="badge" style={{ background: 'var(--bg)', color: rc.color, border: `1px solid ${rc.color}40` }}>
+            {rc.label}
+          </span>
+        </td>
+        <td style={{ fontSize: 12, color: 'var(--t3)' }}>
+          {new Date(app.submitted_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' })}
+        </td>
+        <td style={{ color: 'var(--t3)', textAlign: 'right' }}>→</td>
+      </tr>
+    );
+  });
 }
 
 const LOAN_TYPES = [
@@ -168,7 +253,7 @@ export default function AnalystDashboard() {
 
           {/* Score range */}
           <div className="form-group">
-            <label className="form-label">Score Range</label>
+            <label className="form-label" htmlFor="score-min-input">Score Range</label>
             <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
               <input
                 type="number" min={0} max={100} step={1}
@@ -210,7 +295,7 @@ export default function AnalystDashboard() {
 
           {/* Risk segment */}
           <div className="form-group">
-            <label className="form-label">Risk Segment</label>
+            <span className="form-label" style={{ display: 'block', marginBottom: 6 }}>Risk Segment</span>
             {['low', 'medium', 'high'].map(seg => (
               <label key={seg} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer', marginBottom: 4 }}>
                 <input
@@ -226,7 +311,7 @@ export default function AnalystDashboard() {
 
           {/* Loan type */}
           <div className="form-group">
-            <label className="form-label">Loan Type</label>
+            <label className="form-label" htmlFor="loan-type-filter">Loan Type</label>
             <select
               className="form-input"
               value={loanType}
@@ -235,14 +320,14 @@ export default function AnalystDashboard() {
             >
               <option value="">All types</option>
               {LOAN_TYPES.map(t => (
-                <option key={t} value={t}>{t.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
+                <option key={t} value={t}>{t.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</option>
               ))}
             </select>
           </div>
 
           {/* Recommendation */}
           <div className="form-group">
-            <label className="form-label">Recommendation</label>
+            <label className="form-label" htmlFor="recommendation-filter">Recommendation</label>
             <select
               className="form-input"
               value={recFilter}
@@ -296,116 +381,7 @@ export default function AnalystDashboard() {
               </tr>
             </thead>
             <tbody>
-              {loading ? (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 48, color: 'var(--t3)' }}>
-                  <span className="spinner" style={{ marginRight: 8 }} />Loading queue…
-                </td></tr>
-              ) : apps.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign: 'center', padding: 48, color: 'var(--t3)' }}>
-                  No applications match the current filters.
-                </td></tr>
-              ) : apps.map(app => {
-                const rk = riskLabel(app.risk_tier);
-                const rc = recPill(app.recommendation);
-                return (
-                  <tr
-                    key={app.application_id}
-                    style={{ cursor: 'pointer' }}
-                    onClick={() => navigate(`/analyst/applications/${app.application_id}`)}
-                  >
-                    {/* Applicant */}
-                    <td>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {app.has_fraud_flags && (
-                          <span title="Fraud flagged" style={{ color: 'var(--bad)', fontSize: 13 }}>⚠</span>
-                        )}
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: 13 }}>
-                            {app.applicant_name ?? `…${app.application_id.slice(-6)}`}
-                          </div>
-                          <div style={{ fontSize: 11, color: 'var(--t3)', fontFamily: 'monospace' }}>
-                            {app.application_id.slice(0, 8)}…
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-
-                    {/* Loan type */}
-                    <td style={{ textTransform: 'capitalize' }}>
-                      {app.loan_type.replace(/_/g, ' ')}
-                    </td>
-
-                    {/* Amount */}
-                    <td style={{ fontVariantNumeric: 'tabular-nums' }}>
-                      ₹{Number(app.amount_requested).toLocaleString('en-IN')}
-                    </td>
-
-                    {/* Score badge */}
-                    <td>
-                      {app.score !== null ? (
-                        <span style={{
-                          display: 'inline-block',
-                          minWidth: 44,
-                          textAlign: 'center',
-                          padding: '3px 10px',
-                          borderRadius: 4,
-                          fontWeight: 700,
-                          fontSize: 13,
-                          background: scoreBg(app.score),
-                          color: scoreColor(app.score),
-                        }}>
-                          {app.score.toFixed(1)}
-                        </span>
-                      ) : (
-                        <span style={{ color: 'var(--t3)', fontSize: 12 }}>—</span>
-                      )}
-                    </td>
-
-                    {/* Risk tag */}
-                    <td>
-                      {rk.label !== '—' ? (
-                        <span className={`badge ${rk.cls}`}>{rk.label}</span>
-                      ) : (
-                        <span style={{ color: 'var(--t3)', fontSize: 12 }}>—</span>
-                      )}
-                    </td>
-
-                    {/* Recommendation pill */}
-                    <td>
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px 10px',
-                        borderRadius: 99,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        background: rc.color + '18',
-                        color: rc.color,
-                        textTransform: 'uppercase',
-                        letterSpacing: '.04em',
-                      }}>
-                        {rc.label}
-                      </span>
-                    </td>
-
-                    {/* Date */}
-                    <td style={{ color: 'var(--t3)', fontSize: 12 }}>
-                      {new Date(app.submitted_at).toLocaleDateString('en-IN', {
-                        day: 'numeric', month: 'short',
-                      })}
-                    </td>
-
-                    {/* Action */}
-                    <td onClick={e => e.stopPropagation()}>
-                      <button
-                        className="btn btn-ghost btn-sm"
-                        onClick={() => navigate(`/analyst/applications/${app.application_id}`)}
-                      >
-                        Review →
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
+              {renderQueueTableBody(loading, apps, navigate)}
             </tbody>
           </table>
         </div>

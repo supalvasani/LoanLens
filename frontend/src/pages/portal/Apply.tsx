@@ -46,8 +46,8 @@ export default function PortalApply() {
 
   function validate(): boolean {
     const errs: FormErrors = {};
-    const amt = parseFloat(amount);
-    if (!amount || isNaN(amt) || amt < selected.min) {
+    const amt = Number.parseFloat(amount);
+    if (!amount || Number.isNaN(amt) || amt < selected.min) {
       errs.amount = `Minimum amount for ${selected.label} is ₹${selected.min.toLocaleString('en-IN')}`;
     }
     if (!purpose.trim() || purpose.trim().length < 10) {
@@ -73,7 +73,7 @@ export default function PortalApply() {
       // 1. Submit loan application
       const app = await loanService.apply({
         loan_type: loanType,
-        amount_requested: parseFloat(amount),
+        amount_requested: Number.parseFloat(amount),
         purpose: purpose.trim(),
       });
       setAppId(app.application_id);
@@ -191,7 +191,7 @@ export default function PortalApply() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Loan Type</label>
+              <span className="form-label" style={{ display: 'block', marginBottom: 6 }}>Loan Type</span>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
                 {LOAN_TYPES.map(t => (
                   <button
@@ -221,8 +221,9 @@ export default function PortalApply() {
             </div>
 
             <div className="form-group">
-              <label className="form-label">Amount Requested (₹)</label>
+              <label className="form-label" htmlFor="loan-amount-input">Amount Requested (₹)</label>
               <input
+                id="loan-amount-input"
                 type="number"
                 className="form-input"
                 placeholder={`e.g. ${(selected.min * 10).toLocaleString('en-IN')}`}
@@ -236,8 +237,9 @@ export default function PortalApply() {
             </div>
 
             <div className="form-group" style={{ marginBottom: 0 }}>
-              <label className="form-label">Purpose</label>
+              <label className="form-label" htmlFor="loan-purpose-input">Purpose</label>
               <textarea
+                id="loan-purpose-input"
                 className="form-input"
                 rows={3}
                 placeholder="Describe what you will use this loan for (minimum 10 characters)…"
@@ -268,6 +270,7 @@ export default function PortalApply() {
               onChange={handleFileChange}
             />
             <div
+              tabIndex={0}
               style={{
                 border: `2px dashed ${errors.file ? 'var(--bad)' : file ? 'var(--ok)' : 'var(--border)'}`,
                 borderRadius: 8,
@@ -278,6 +281,7 @@ export default function PortalApply() {
                 transition: 'all 150ms',
               }}
               onClick={() => fileRef.current?.click()}
+              onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') fileRef.current?.click(); }}
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) { setFile(f); setErrors(p => ({ ...p, file: undefined })); } }}
             >

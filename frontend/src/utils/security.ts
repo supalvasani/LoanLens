@@ -10,7 +10,7 @@ export function sanitizeToken(token: string | null | undefined): string {
   let clean = '';
   for (let i = 0; i < token.length; i++) {
     const char = token.charAt(i);
-    if (allowed.indexOf(char) !== -1) {
+    if (allowed.includes(char)) {
       clean += char;
     }
   }

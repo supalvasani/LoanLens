@@ -10,7 +10,9 @@ import { useAuth } from '../hooks/useAuth';
 
 // ── RequireAuth ───────────────────────────────────────────────────────────────
 // Blocks unauthenticated users — redirects to /login
-interface RequireAuthProps { children: React.ReactNode }
+interface RequireAuthProps {
+  readonly children: React.ReactNode;
+}
 
 export function RequireAuth({ children }: RequireAuthProps) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -38,8 +40,8 @@ export function RequireAuth({ children }: RequireAuthProps) {
 // Ensures the logged-in user has one of the allowed roles
 // If not — redirects to their correct dashboard (prevents URL probing)
 interface RequireRoleProps {
-  children: React.ReactNode;
-  allowedRoles: Role[];
+  readonly children: React.ReactNode;
+  readonly allowedRoles: readonly Role[];
 }
 
 export function RequireRole({ children, allowedRoles }: RequireRoleProps) {

@@ -27,15 +27,24 @@ const LOAN_LABELS: Record<string, string> = {
   two_wheeler_loan: 'Two-Wheeler Loan',
 };
 
-function QuickCard({ icon, label, path, desc }: { icon: React.ReactNode; label: string; path: string; desc: string }) {
+function getPortalScoreColor(scoreNum?: number | null): string {
+  if (scoreNum == null) return 'var(--t3)';
+  if (scoreNum >= 70) return 'var(--ok)';
+  if (scoreNum >= 45) return 'var(--warn)';
+  return 'var(--bad)';
+}
+
+function QuickCard({ icon, label, path, desc }: Readonly<{ icon: React.ReactNode; label: string; path: string; desc: string }>) {
   const navigate = useNavigate();
   return (
     <div
+      tabIndex={0}
       className="card"
       style={{ cursor: 'pointer', transition: 'box-shadow 150ms', padding: '18px 20px' }}
       onMouseEnter={e => (e.currentTarget.style.boxShadow = 'var(--sh-md)')}
       onMouseLeave={e => (e.currentTarget.style.boxShadow = 'var(--sh)')}
       onClick={() => navigate(path)}
+      onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') navigate(path); }}
     >
       <div style={{ color: 'var(--ink)', marginBottom: 10, display: 'flex', alignItems: 'center' }}>{icon}</div>
       <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--t1)', marginBottom: 4 }}>{label}</div>
@@ -53,10 +62,7 @@ export default function PortalDashboard() {
   const bestAmount = eligibility?.best_eligible_amount;
 
   const scoreNum = score?.score;
-  const scoreColor = scoreNum == null ? 'var(--t3)'
-    : scoreNum >= 70 ? 'var(--ok)'
-    : scoreNum >= 45 ? 'var(--warn)'
-    : 'var(--bad)';
+  const scoreColor = getPortalScoreColor(scoreNum);
 
   return (
     <DashboardShell
@@ -180,7 +186,7 @@ export default function PortalDashboard() {
                     const si = STATUS_COLOR[app.status] ?? STATUS_COLOR.pending;
                     return (
                       <tr key={app.application_id}>
-                        <td style={{ fontWeight: 500 }}>{LOAN_LABELS[app.loan_type] ?? app.loan_type.replace(/_/g, ' ')}</td>
+                        <td style={{ fontWeight: 500 }}>{LOAN_LABELS[app.loan_type] ?? app.loan_type.replaceAll('_', ' ')}</td>
                         <td>₹{Number(app.amount_requested).toLocaleString('en-IN')}</td>
                         <td>
                           <span style={{ fontSize: 11, fontWeight: 600, padding: '2px 8px', borderRadius: 3, background: si.bg, color: si.color }}>

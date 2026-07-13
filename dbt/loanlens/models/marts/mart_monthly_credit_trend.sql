@@ -8,7 +8,8 @@ with constants as (
         0.20::numeric as w_balance,
         'flat' as t_flat,
         'up' as t_up,
-        'down' as t_down
+        'down' as t_down,
+        interval '6 months' as lookback_interval
 ),
 
 monthly_income as (
@@ -18,7 +19,7 @@ monthly_income as (
         sum(case when t.txn_type = c.c_credit and t.category in ('income', 'salary') then t.amount else 0 end) as income
     from {{ ref('int_transactions_categorized') }} t
     cross join constants c
-    where t.txn_date >= date_trunc(c.c_month, current_date - interval '6 months')::date
+    where t.txn_date >= date_trunc(c.c_month, current_date - c.lookback_interval)::date
     group by 1, 2
 ),
 
@@ -29,7 +30,7 @@ monthly_emi as (
         sum(case when t.txn_type = c.c_debit and t.category in ('emi', 'loan_obligation') then t.amount else 0 end) as emi
     from {{ ref('int_transactions_categorized') }} t
     cross join constants c
-    where t.txn_date >= date_trunc(c.c_month, current_date - interval '6 months')::date
+    where t.txn_date >= date_trunc(c.c_month, current_date - c.lookback_interval)::date
     group by 1, 2
 ),
 
@@ -40,7 +41,7 @@ monthly_bounces as (
         count(*) filter (where t.category = 'bounce') as bounce_count
     from {{ ref('int_transactions_categorized') }} t
     cross join constants c
-    where t.txn_date >= date_trunc(c.c_month, current_date - interval '6 months')::date
+    where t.txn_date >= date_trunc(c.c_month, current_date - c.lookback_interval)::date
     group by 1, 2
 ),
 
@@ -52,7 +53,7 @@ monthly_balance as (
         max(t.balance_after) - min(t.balance_after) as balance_swing
     from {{ ref('stg_transactions') }} t
     cross join constants c
-    where t.txn_date >= date_trunc(c.c_month, current_date - interval '6 months')::date
+    where t.txn_date >= date_trunc(c.c_month, current_date - c.lookback_interval)::date
     group by 1, 2
 ),
 

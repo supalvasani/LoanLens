@@ -254,17 +254,14 @@ def test_serial_column_not_chosen_as_credit_in_split_pattern():
     """
     n = 20
     rows_sl, rows_dr, rows_cr, rows_desc = [], [], [], []
-    balance = 100000.0
     for i in range(n):
         rows_sl.append(str(i + 1))
         if i % 5 == 0:  # occasional credit, mostly debits — mirrors real statement shape
             rows_dr.append("")
             rows_cr.append("5000.00")
-            balance += 500
         else:
             rows_dr.append("2000.00")
             rows_cr.append("")
-            balance -= 2000
         rows_desc.append(f"Txn {i}")
 
     df = _make_df({

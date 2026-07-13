@@ -37,6 +37,11 @@ class ChatResponse(BaseModel):
     "",
     status_code=status.HTTP_200_OK,
     summary="Ask LoanBot a question about credit report and eligibility",
+    responses={
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "description": "LoanBot is temporarily unavailable. Please try again shortly.",
+        },
+    },
 )
 @limiter.limit("10/minute")
 async def chat(

@@ -14,6 +14,28 @@ const SAMPLE_CSV = `txn_date,amount,txn_type,description,balance_after
 2026-01-22,800,debit,Mobile Recharge,29700
 2026-01-28,500,debit,Grocery Store,29200`;
 
+function downloadSample() {
+  const blob = new Blob([SAMPLE_CSV], { type: 'text/csv' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'sample_bank_statement.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function getStatementDropzoneBorder(dragOver: boolean, file: File | null): string {
+  if (dragOver) return 'var(--ink)';
+  if (file) return 'var(--ok)';
+  return 'var(--border)';
+}
+
+function getStatementDropzoneBg(dragOver: boolean, file: File | null): string {
+  if (dragOver) return 'rgba(28,25,23,.03)';
+  if (file) return 'rgba(34,197,94,.04)';
+  return 'var(--bg)';
+}
+
 export default function PortalStatements() {
   const fileRef     = useRef<HTMLInputElement>(null);
   const [file, setFile]               = useState<File | null>(null);
@@ -62,16 +84,6 @@ export default function PortalStatements() {
     }
   }
 
-  function downloadSample() {
-    const blob = new Blob([SAMPLE_CSV], { type: 'text/csv' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'sample_bank_statement.csv';
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   return (
     <DashboardShell
       title="Bank Statement Upload"
@@ -118,16 +130,18 @@ export default function PortalStatements() {
           />
 
           <div
+            tabIndex={0}
             style={{
-              border: `2px dashed ${dragOver ? 'var(--ink)' : file ? 'var(--ok)' : 'var(--border)'}`,
+              border: `2px dashed ${getStatementDropzoneBorder(dragOver, file)}`,
               borderRadius: 10,
               padding: '36px 24px',
               textAlign: 'center',
               cursor: 'pointer',
-              background: dragOver ? 'rgba(28,25,23,.03)' : file ? 'rgba(34,197,94,.04)' : 'var(--bg)',
+              background: getStatementDropzoneBg(dragOver, file),
               transition: 'all 150ms',
             }}
             onClick={() => !file && fileRef.current?.click()}
+            onKeyDown={e => { if ((e.key === 'Enter' || e.key === ' ') && !file) fileRef.current?.click(); }}
             onDragOver={e => { e.preventDefault(); setDragOver(true); }}
             onDragLeave={() => setDragOver(false)}
             onDrop={handleDrop}
@@ -222,8 +236,8 @@ export default function PortalStatements() {
                 </span>
                 <div>
                   <div style={{ fontWeight: 600, marginBottom: 4 }}>{result.errors.length} row(s) had issues:</div>
-                  {result.errors.slice(0, 5).map((e, i) => (
-                    <div key={i} style={{ fontSize: 11, marginTop: 2 }}>· {e}</div>
+                  {result.errors.slice(0, 5).map((e) => (
+                    <div key={e} style={{ fontSize: 11, marginTop: 2 }}>· {e}</div>
                   ))}
                   {result.errors.length > 5 && (
                     <div style={{ fontSize: 11, marginTop: 4, color: 'var(--t3)' }}>
@@ -245,8 +259,8 @@ export default function PortalStatements() {
             'txn_type must be exactly "credit" or "debit" (lowercase).',
             'Upload at least 3 months of data for accurate scoring.',
             'Duplicate rows are safely skipped — re-uploads are safe.',
-          ].map((tip, i) => (
-            <div key={i} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
+          ].map((tip) => (
+            <div key={tip} style={{ display: 'flex', gap: 8, marginBottom: 6 }}>
               <span style={{ color: 'var(--ok)', display: 'flex', alignItems: 'center', marginTop: 2, flexShrink: 0 }}>
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
               </span>

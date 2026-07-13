@@ -8,7 +8,7 @@ import { chatbotService, type ChatMessage } from '../../services/chatbotService'
 
 // ── Message bubble ────────────────────────────────────────────────────────────
 
-function Bubble({ msg }: { msg: ChatMessage }) {
+function Bubble({ msg }: Readonly<{ msg: ChatMessage }>) {
   const isUser = msg.role === 'user';
   return (
     <div style={{
@@ -222,7 +222,7 @@ export default function AnalystChatbot() {
           overflowY: 'auto',
           minHeight: 0,
         }}>
-          {messages.map((msg, i) => <Bubble key={i} msg={msg} />)}
+          {messages.map((msg) => <Bubble key={`${msg.role}-${msg.content.slice(0, 20)}`} msg={msg} />)}
           {loading && <TypingIndicator />}
           <div ref={bottomRef} />
         </div>

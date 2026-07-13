@@ -19,6 +19,32 @@ function getDecidedBadgeClass(decided: string): string {
   return 'badge badge-warning';
 }
 
+function renderDecisionButtons(app: { id: string; score: number }, decide: (id: string, decision: string) => void) {
+  if (app.score > 65) {
+    return (
+      <div className="flex gap-2" style={{ marginTop: 10 }}>
+        <button onClick={() => decide(app.id, 'Approved')} className="btn btn-primary btn-sm" style={{ flex: 1 }}>✅ Approve</button>
+        <button onClick={() => decide(app.id, 'Escalated')} className="btn btn-ghost btn-sm">⬆ Escalate</button>
+      </div>
+    );
+  }
+  if (app.score < 45) {
+    return (
+      <div className="flex gap-2" style={{ marginTop: 10 }}>
+        <button onClick={() => decide(app.id, 'Rejected')} className="btn btn-danger btn-sm" style={{ flex: 1 }}>❌ Reject</button>
+        <button onClick={() => decide(app.id, 'Escalated')} className="btn btn-ghost btn-sm">⬆ Escalate</button>
+      </div>
+    );
+  }
+  return (
+    <div className="flex gap-2" style={{ marginTop: 10 }}>
+      <button onClick={() => decide(app.id, 'Escalated')} className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--color-warning)', borderColor: 'rgba(245,158,11,0.3)' }}>
+        ⬆ Must Escalate (Grey Zone)
+      </button>
+    </div>
+  );
+}
+
 const STATS = [
   { icon: '📥', label: 'In My Queue',      value: '18',   trend: '+3', dir: 'warn', bg: 'rgba(99,102,241,0.15)',  color: '#818cf8' },
   { icon: '✅', label: 'Closed Today',      value: '12',   trend: '+4', dir: 'up',   bg: 'rgba(34,197,94,0.15)',   color: '#4ade80' },
@@ -144,23 +170,7 @@ export default function AnalystDashboard() {
                       </span>
                     </div>
                   ) : (
-                    <div className="flex gap-2" style={{ marginTop: 10 }}>
-                      {app.score > 65 ? (
-                        <>
-                          <button onClick={() => decide(app.id, 'Approved')} className="btn btn-primary btn-sm" style={{ flex: 1 }}>✅ Approve</button>
-                          <button onClick={() => decide(app.id, 'Escalated')} className="btn btn-ghost btn-sm">⬆ Escalate</button>
-                        </>
-                      ) : app.score < 45 ? (
-                        <>
-                          <button onClick={() => decide(app.id, 'Rejected')} className="btn btn-danger btn-sm" style={{ flex: 1 }}>❌ Reject</button>
-                          <button onClick={() => decide(app.id, 'Escalated')} className="btn btn-ghost btn-sm">⬆ Escalate</button>
-                        </>
-                      ) : (
-                        <button onClick={() => decide(app.id, 'Escalated')} className="btn btn-ghost btn-sm" style={{ flex: 1, color: 'var(--color-warning)', borderColor: 'rgba(245,158,11,0.3)' }}>
-                          ⬆ Must Escalate (Grey Zone)
-                        </button>
-                      )}
-                    </div>
+                    renderDecisionButtons(app, decide)
                   )}
                 </div>
               );

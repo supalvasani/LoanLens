@@ -97,8 +97,8 @@ flags as (
     from {{ ref('stg_transactions') }} c_txn
     join {{ ref('stg_transactions') }} d
         on c_txn.raw_applicant_id = d.raw_applicant_id
-       and c_txn.txn_type = 'credit'
-       and d.txn_type = 'debit'
+       and c_txn.txn_type = c.c_credit
+       and d.txn_type = c.c_debit
        and c_txn.amount = d.amount
        and d.txn_date between c_txn.txn_date and c_txn.txn_date + interval '3 days'
     cross join constants c

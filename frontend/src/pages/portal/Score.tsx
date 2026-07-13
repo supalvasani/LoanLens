@@ -13,13 +13,23 @@ import { loanService } from '../../services/loanService';
 import type { CreditScoreData, CreditTrend, ScoreComponent } from '../../services/loanService';
 
 // ── Score gauge ───────────────────────────────────────────────────────────────
-function ScoreRing({ score }: { score: number }) {
-  const color = score >= 70 ? 'var(--ok)' : score >= 45 ? 'var(--warn)' : 'var(--bad)';
-  const tier  = score >= 80 ? 'Excellent'
-    : score >= 70 ? 'Good'
-    : score >= 55 ? 'Fair'
-    : score >= 40 ? 'Poor'
-    : 'Very Poor';
+function getScoreRingColor(score: number): string {
+  if (score >= 70) return 'var(--ok)';
+  if (score >= 45) return 'var(--warn)';
+  return 'var(--bad)';
+}
+
+function getScoreRingTier(score: number): string {
+  if (score >= 80) return 'Excellent';
+  if (score >= 70) return 'Good';
+  if (score >= 55) return 'Fair';
+  if (score >= 40) return 'Poor';
+  return 'Very Poor';
+}
+
+function ScoreRing({ score }: Readonly<{ score: number }>) {
+  const color = getScoreRingColor(score);
+  const tier  = getScoreRingTier(score);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '32px 0' }}>
@@ -166,7 +176,7 @@ export default function PortalScore() {
             {score.risk_tier && (
               <div style={{ textAlign: 'center', paddingBottom: 8 }}>
                 <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.08em', color: 'var(--t3)', marginBottom: 4 }}>Risk Tier</div>
-                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--t1)' }}>{score.risk_tier.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}</div>
+                <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--t1)' }}>{score.risk_tier.replaceAll('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}</div>
               </div>
             )}
             {score.recommendation && (

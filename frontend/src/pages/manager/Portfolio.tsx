@@ -28,7 +28,7 @@ export default function ManagerPortfolio() {
   if (loading) return (
     <DashboardShell title="Branch Portfolio" subtitle="Capital allocation and risk insights">
       <div style={{ textAlign: 'center', padding: 80, color: 'var(--t3)' }}>
-        <span className="spinner" style={{ fontSize: 20, marginRight: 8 }} />
+        <span className="spinner" style={{ fontSize: 20, marginRight: 8 }} />{' '}
         Loading portfolio analytics…
       </div>
     </DashboardShell>
@@ -100,7 +100,7 @@ export default function ManagerPortfolio() {
                   cursor={{ fill: 'rgba(0,0,0,0.03)' }}
                 />
                 <Bar dataKey="count" fill="var(--ink)" radius={[3, 3, 0, 0]} barSize={44}>
-                  {portfolio.score_distribution.map((entry, index) => {
+                  {portfolio.score_distribution.map((entry) => {
                     // Custom colors per bucket
                     let color = '#C62828'; // bad for low scores
                     if (entry.score_bucket === '81-100' || entry.score_bucket === '61-80') {
@@ -108,7 +108,7 @@ export default function ManagerPortfolio() {
                     } else if (entry.score_bucket === '41-60') {
                       color = '#d97706';
                     }
-                    return <Cell key={`cell-${index}`} fill={color} />;
+                    return <Cell key={entry.score_bucket} fill={color} />;
                   })}
                 </Bar>
               </BarChart>
@@ -132,8 +132,8 @@ export default function ManagerPortfolio() {
                     paddingAngle={3}
                     dataKey="value"
                   >
-                    {approvalData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    {approvalData.map((entry) => (
+                      <Cell key={entry.name} fill={entry.color} />
                     ))}
                   </Pie>
                   <Tooltip formatter={(value) => [`${value}%`, 'Percentage']} />

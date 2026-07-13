@@ -7,43 +7,49 @@ import { DashboardShell } from '../../components/DashboardShell';
 import { adminService } from '../../services/adminService';
 import type { ReviewQueueItem, PipelineDashboardResponse } from '../../types/admin';
 
-function buildResolvePayload(
-  promote: boolean,
-  promoteName: string,
-  dateCol: string,
-  amountCol1: string,
-  amountCol2: string,
-  typeCol: string,
-  promotePattern: string,
-  descCols: string,
-  balCol: string
-) {
+interface ResolvePayloadOptions {
+  promote: boolean;
+  promoteName: string;
+  dateCol: string;
+  amountCol1: string;
+  amountCol2: string;
+  typeCol: string;
+  promotePattern: string;
+  descCols: string;
+  balCol: string;
+}
+
+function validatePromotionInputs(opts: ResolvePayloadOptions) {
+  if (!opts.promoteName.trim()) throw new Error('Bank name is required');
+  if (!opts.dateCol.trim()) throw new Error('Date column is required');
+  if (!opts.amountCol1.trim()) throw new Error('Amount column is required');
+  if (opts.promotePattern === 'split' && !opts.amountCol2.trim()) throw new Error('Credit amount column is required for split layout');
+  if (opts.promotePattern === 'flagged' && !opts.typeCol.trim()) throw new Error('Transaction type column is required for flagged layout');
+}
+
+function buildResolvePayload(opts: ResolvePayloadOptions) {
   const payload: {
     resolved: boolean;
     promote: boolean;
     bank_name?: string;
     amount_pattern?: string;
     column_map?: Record<string, string | string[]>;
-  } = { resolved: true, promote };
+  } = { resolved: true, promote: opts.promote };
 
-  if (promote) {
-    if (!promoteName.trim()) throw new Error('Bank name is required');
-    if (!dateCol.trim()) throw new Error('Date column is required');
-    if (!amountCol1.trim()) throw new Error('Amount column is required');
-    if (promotePattern === 'split' && !amountCol2.trim()) throw new Error('Credit amount column is required for split layout');
-    if (promotePattern === 'flagged' && !typeCol.trim()) throw new Error('Transaction type column is required for flagged layout');
+  if (opts.promote) {
+    validatePromotionInputs(opts);
 
     const colMap: Record<string, string | string[]> = {
-      txn_date_col: dateCol.trim(),
-      amount_cols: promotePattern === 'split' ? [amountCol1.trim(), amountCol2.trim()] : [amountCol1.trim()],
-      description_cols: descCols.split(',').map(s => s.trim()).filter(Boolean),
+      txn_date_col: opts.dateCol.trim(),
+      amount_cols: opts.promotePattern === 'split' ? [opts.amountCol1.trim(), opts.amountCol2.trim()] : [opts.amountCol1.trim()],
+      description_cols: opts.descCols.split(',').map(s => s.trim()).filter(Boolean),
     };
 
-    if (balCol.trim()) colMap.balance_col = balCol.trim();
-    if (promotePattern === 'flagged') colMap.txn_type_col = typeCol.trim();
+    if (opts.balCol.trim()) colMap.balance_col = opts.balCol.trim();
+    if (opts.promotePattern === 'flagged') colMap.txn_type_col = opts.typeCol.trim();
 
-    payload.bank_name = promoteName.trim();
-    payload.amount_pattern = promotePattern;
+    payload.bank_name = opts.promoteName.trim();
+    payload.amount_pattern = opts.promotePattern;
     payload.column_map = colMap;
   }
   return payload;
@@ -157,7 +163,7 @@ export default function AdminPipeline() {
     setModalError(null);
 
     try {
-      const payload = buildResolvePayload(
+      const payload = buildResolvePayload({
         promote,
         promoteName,
         dateCol,
@@ -166,8 +172,8 @@ export default function AdminPipeline() {
         typeCol,
         promotePattern,
         descCols,
-        balCol
-      );
+        balCol,
+      });
 
       await adminService.resolvePipelineReview(selectedReview.review_id, payload);
       setSelectedReview(null);

@@ -49,7 +49,7 @@ api.interceptors.response.use(
       if (!refreshToken) {
         localStorage.clear();
         window.location.href = '/login';
-        return Promise.reject(error);
+        throw error;
       }
 
       if (isRefreshing) {
@@ -80,13 +80,13 @@ api.interceptors.response.use(
         processQueue(refreshError, null);
         localStorage.clear();
         window.location.href = '/login';
-        return Promise.reject(refreshError);
+        throw refreshError;
       } finally {
         isRefreshing = false;
       }
     }
 
-    return Promise.reject(error);
+    throw error;
   },
 );
 

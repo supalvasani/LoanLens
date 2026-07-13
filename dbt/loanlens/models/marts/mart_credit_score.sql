@@ -5,7 +5,9 @@ with constants as (
         0.20::numeric as w_balance,
         'approve' as rec_approve,
         'review' as rec_review,
-        'reject' as rec_reject
+        'reject' as rec_reject,
+        'weight' as k_weight,
+        'score' as k_score
 ),
 scored as (
     select
@@ -49,10 +51,10 @@ select
         else c.rec_reject
     end as recommendation,
     jsonb_build_object(
-        'income_stability', jsonb_build_object('weight', c.w_income, 'score', b.income_stability_score),
-        'emi_burden', jsonb_build_object('weight', c.w_emi, 'score', b.emi_burden_score),
-        'bounce_history', jsonb_build_object('weight', c.w_emi, 'score', b.bounce_score),
-        'balance_maintenance', jsonb_build_object('weight', c.w_balance, 'score', b.balance_score),
+        'income_stability', jsonb_build_object(c.k_weight, c.w_income, c.k_score, b.income_stability_score),
+        'emi_burden', jsonb_build_object(c.k_weight, c.w_emi, c.k_score, b.emi_burden_score),
+        'bounce_history', jsonb_build_object(c.k_weight, c.w_emi, c.k_score, b.bounce_score),
+        'balance_maintenance', jsonb_build_object(c.k_weight, c.w_balance, c.k_score, b.balance_score),
         'final_score', b.score
     ) as score_breakdown_json,
     now() as computed_at
