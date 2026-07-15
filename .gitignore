@@ -11,27 +11,65 @@ __pycache__/
 venv/
 env/
 .venv/
+.pytest_cache/
+.ruff_cache/
 
-# Environment Variables
+# Environment Variables & Secrets (root and all subdirectories)
 .env
-.env.local
-.env.development
-.env.test
-.env.production
+.env.*
+*.env
+*.env.*
+**/.env
+**/.env.*
+
+# Private Keys, SSL Certificates & Auth Tokens
+*.pem
+*.key
+*.pfx
+*.p12
+*.crt
+*.csr
+id_rsa
+id_rsa.pub
+id_ed25519
+
+# Cloud & API Service Account Credentials
+*service-account*.json
+*service_account*.json
+gcp-key*.json
+aws_credentials
+*.credentials
+credentials.json
+
+# Local Databases, Dumps & Sensitive Data Files
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+*.dump
+*.sql.gz
+*.sql.tar
+*.bak
 
 # Logs
 logs/
 *.log
 
-# OS Files
+# OS & Editor Files
 .DS_Store
 Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea/
 
 # Metabase Local Download
 metabase/
 
-# dbt Build & Generated Artifacts
+# dbt Build, Credentials & Generated Artifacts
 dbt/loanlens/target/
 dbt/loanlens/dbt_packages/
 dbt/loanlens/logs/
-**/target/
+**/target/
+**/profiles.yml.local
+**/profiles.yml.secret
+

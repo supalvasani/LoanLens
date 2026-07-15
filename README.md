@@ -4,6 +4,8 @@
 
 LoanLens is a full-stack data engineering + web application that accepts bank statement CSVs from any Indian bank, processes them through a universal ingestion pipeline, computes credit scores and loan eligibility using dbt transforms, and surfaces the results to analysts, managers, and applicants through a role-scoped React frontend.
 
+> 📖 **Architecture & Lineage Guide:** For detailed Mermaid diagrams, Airflow execution lifecycles, and dbt Data Mart specifications, see **[ARCHITECTURE.md](file:///d:/LoanLens/ARCHITECTURE.md)**.
+
 ---
 
 ## Table of Contents
