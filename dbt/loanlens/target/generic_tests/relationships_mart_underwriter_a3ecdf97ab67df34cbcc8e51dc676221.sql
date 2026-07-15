@@ -1,1 +1,0 @@
-{{ test_relationships(column_name="applicant_id", field="applicant_id", model=get_where_subquery(ref('mart_underwriter_report')), to=ref('mart_credit_score')) }}

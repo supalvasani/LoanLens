@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="risk_tier", model=get_where_subquery(ref('mart_risk_segmentation'))) }}

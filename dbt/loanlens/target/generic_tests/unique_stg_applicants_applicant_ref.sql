@@ -1,1 +1,0 @@
-{{ test_unique(column_name="applicant_ref", model=get_where_subquery(ref('stg_applicants'))) }}

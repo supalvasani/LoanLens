@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="loan_type", model=get_where_subquery(ref('mart_loan_eligibility'))) }}

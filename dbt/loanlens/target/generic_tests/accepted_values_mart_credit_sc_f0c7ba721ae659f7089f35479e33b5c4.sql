@@ -1,1 +1,0 @@
-{{ test_accepted_values(column_name="recommendation", model=get_where_subquery(ref('mart_credit_score')), values=["approve","review","reject"]) }}

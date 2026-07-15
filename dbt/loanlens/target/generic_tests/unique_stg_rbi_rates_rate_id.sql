@@ -1,1 +1,0 @@
-{{ test_unique(column_name="rate_id", model=get_where_subquery(ref('stg_rbi_rates'))) }}

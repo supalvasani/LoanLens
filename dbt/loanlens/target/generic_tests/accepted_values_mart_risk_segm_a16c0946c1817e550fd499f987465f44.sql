@@ -1,1 +1,0 @@
-{{ test_accepted_values(column_name="risk_tier", model=get_where_subquery(ref('mart_risk_segmentation')), values=["low","medium","high"]) }}

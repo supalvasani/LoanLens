@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="rate_value", model=get_where_subquery(ref('stg_rbi_rates'))) }}

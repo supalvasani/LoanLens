@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="status", model=get_where_subquery(ref('mart_pipeline_audit'))) }}

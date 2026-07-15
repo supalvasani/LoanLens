@@ -1,1 +1,0 @@
-{{ test_not_null(column_name="bounce_count", model=get_where_subquery(ref('mart_underwriter_report'))) }}
