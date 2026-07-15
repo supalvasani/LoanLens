@@ -12,19 +12,15 @@ LoanLens is a full-stack data engineering + web application that accepts bank st
 
 - [App Architecture](#app-architecture)
   - [System Overview](#system-overview)
-  - [Backend — FastAPI](#backend--fastapi)
-  - [Frontend — React + Vite](#frontend--react--vite)
+  - [Full System Architecture (Data Lineage)](#full-system-architecture-data-lineage)
+  - [Airflow DAG Execution Lifecycle](#airflow-dag-execution-lifecycle)
+  - [dbt Data Lineage (Column-Level Flow)](#dbt-data-lineage-column-level-flow)
   - [Data Layer — PostgreSQL + dbt](#data-layer--postgresql--dbt)
   - [Orchestration — Apache Airflow](#orchestration--apache-airflow)
   - [Role-Based Access Control](#role-based-access-control)
-  - [Decision Engine & Escalation Rules](#decision-engine--escalation-rules)
 - [Data Engineering Architecture](#data-engineering-architecture)
-- [Quick Start (Docker)](#quick-start-docker)
+- [Running the Project (Local Dev)](#running-the-project-local-dev)
 - [Service URLs](#service-urls)
-- [Seed Users (login)](#seed-users-login)
-- [Local Development (without full Docker)](#local-development-without-full-docker)
-- [dbt (staging layer)](#dbt-staging-layer)
-- [Troubleshooting](#troubleshooting)
 
 ---
 
@@ -51,70 +47,182 @@ LoanLens is a full-stack data engineering + web application that accepts bank st
                   +---------------+           +----------------+           +----------------+
 ```
 
-### Backend — FastAPI
+### Full System Architecture (Data Lineage)
 
-The backend is a fully async FastAPI application located at `backend/app/`.
+End-to-end flow from landing zone → Airflow orchestration → PostgreSQL layers → dbt transforms → FastAPI → React/Metabase:
 
-#### Directory Structure
+```mermaid
+flowchart TD
+    subgraph Landing["1. Data Ingestion & Landing Zone"]
+        CSV_App["Applicants CSV\n(/data/landing/applicants)"]
+        CSV_Txn["Bank Statement CSVs\n(/data/landing/transactions)"]
+        RBI_Src["RBI Rates Source\n(Repo, MSF, Loan Benchmarks)"]
+    end
 
+    subgraph Airflow["2. Orchestration Layer (Apache Airflow)"]
+        DAG_Ingest["ingest_statements\n(Hourly Schedule)"]
+        DAG_RBI["ingest_rbi_rates\n(Weekly Schedule)"]
+        DAG_Transforms["run_dbt_transforms\n(Triggered post-ingest)"]
+        DAG_Quality["data_quality_check\n(Triggered post-transform)"]
+        DAG_Reports["generate_reports\n(Daily @midnight)"]
+        AuditLog["pipeline_audit Table\n(Execution & Rows Audit)"]
+    end
+
+    subgraph Database["3. PostgreSQL Data Warehouse & Modeling Layers"]
+        subgraph RawLayer["Raw Data Layer"]
+            RAW_App["raw_applicants"]
+            RAW_Txn["raw_transactions"]
+            RAW_Uploads["statement_uploads"]
+            RAW_Reg["format_registry"]
+            RAW_Log["landing_ingest_log"]
+        end
+
+        subgraph StagingLayer["dbt Staging Layer"]
+            STG_App["stg_applicants"]
+            STG_Txn["stg_transactions"]
+            STG_Merch["stg_merchant_categories"]
+            STG_RBI["stg_rbi_rates"]
+        end
+
+        subgraph IntermediateLayer["dbt Intermediate Signal Layer"]
+            INT_Txn["int_transactions_categorized"]
+            INT_Inc["int_monthly_income_summary"]
+            INT_Obl["int_monthly_obligation_summary"]
+            INT_Bnc["int_bounce_history"]
+            INT_Spd["int_spending_by_category"]
+            INT_Bal["int_balance_trends"]
+            INT_Sig["int_combined_signals"]
+        end
+
+        subgraph MartsLayer["dbt Data Marts Analytical Layer"]
+            MART_Credit["mart_credit_score"]
+            MART_Fraud["mart_fraud_flags"]
+            MART_Elig["mart_loan_eligibility"]
+            MART_Risk["mart_risk_segmentation"]
+            MART_Report["mart_underwriter_report"]
+            MART_Trend["mart_monthly_credit_trend"]
+            MART_Audit["mart_pipeline_audit"]
+            MART_Decisions["decisions"]
+        end
+    end
+
+    subgraph Consumption["4. Application & Presentation Layer"]
+        API["FastAPI Backend\n(REST APIs & Underwriting Service)"]
+        Portal["Applicant Portal UI\n(Score, Breakdown, Statements)"]
+        Queue["Underwriter Queue UI\n(Risk Tiers, Decision Overrides)"]
+        Metabase["Metabase BI\n(Executive Analytics & Dashboards)"]
+    end
+
+    CSV_App & CSV_Txn --> DAG_Ingest
+    RBI_Src --> DAG_RBI
+
+    DAG_Ingest --> RAW_App & RAW_Txn & RAW_Uploads & RAW_Log
+    DAG_RBI --> STG_RBI
+    DAG_Ingest -->|Trigger| DAG_Transforms
+
+    DAG_Transforms -->|dbt run staging| STG_App & STG_Txn & STG_Merch
+    DAG_Transforms -->|Trigger| DAG_Quality
+    DAG_Quality -->|dbt test| STG_App & STG_Txn & STG_RBI
+
+    DAG_Reports -->|dbt run marts| INT_Txn & INT_Inc & INT_Obl & INT_Bnc & INT_Spd & INT_Bal & INT_Sig
+    INT_Sig --> MART_Credit & MART_Fraud & MART_Elig & MART_Risk & MART_Report & MART_Trend
+
+    DAG_Ingest & DAG_RBI & DAG_Transforms & DAG_Quality & DAG_Reports -.->|Audit Logging| AuditLog
+    AuditLog --> MART_Audit
+
+    MartsLayer --> API
+    API --> Portal & Queue & MART_Decisions
+    MartsLayer --> Metabase
 ```
-backend/
-  app/
-    api/v1/routes/          -- HTTP route handlers (one file per domain)
-      auth.py               -- JWT login, token refresh
-      upload.py             -- Bank statement upload + ingestion pipeline
-      applications.py       -- Loan application CRUD
-      decisions.py          -- Analyst/Manager/Admin decisions
-      credit_scores.py      -- Credit score retrieval
-      eligibility.py        -- Loan eligibility retrieval
-      analyst.py            -- Analyst-specific views
-      manager.py            -- Manager-specific views
-      admin.py              -- Admin CRUD: users, loan config, audit log
-      chatbot.py            -- AI assistant for applicants
-      users.py              -- Profile management
-    ingestion/              -- Universal bank statement ingestion pipeline
-      pipeline.py           -- Main orchestrator (10-step pipeline)
-      column_classifier.py  -- Heuristic column-role classifier
-      reconcile.py          -- Balance continuity checker
-      dedup.py              -- SHA-256 + UUID5 deduplication
-    services/               -- Business logic layer
-      auth_service.py
-      application_service.py
-      decision_service.py
-      admin_service.py
-      manager_service.py
-      chatbot_service.py
-    models/                 -- SQLAlchemy ORM models
-      user.py               -- User, Role
-      loan.py               -- LoanTypeConfig, AuditLog, Decision,
-                               RawApplicant, RawLoanApplication
-    repositories/           -- Database access layer (async SQLAlchemy)
-    schemas/                -- Pydantic request/response schemas
-    core/                   -- Config, auth, database, rate limiting, logger
-    exceptions/             -- Domain exceptions (EscalationRequired, etc.)
-    enums.py                -- RoleEnum, DecisionEnum, LoanTypeEnum, etc.
-    main.py                 -- FastAPI app factory, middleware, router mount
-  airflow/dags/             -- Airflow DAG definitions
-  alembic/                  -- Database migrations
-  scripts/                  -- Seed scripts, data generators
-  tests/                    -- pytest test suite
+
+### Airflow DAG Execution Lifecycle
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Landing as Landing Zone (CSVs)
+    participant Airflow as Airflow Scheduler
+    participant Pipeline as Ingestion Engine (Classifier/Dedup)
+    participant DB as Postgres Raw Layer
+    participant dbt as dbt Core Engine
+    participant Marts as Postgres Data Marts
+
+    Note over Airflow, DB: Hourly / Automated Statement Ingestion Workflow
+    Airflow->>Landing: Poll /opt/airflow/data/landing
+    Landing-->>Airflow: New Applicant & Statement CSVs detected
+    Airflow->>Pipeline: Invoke ingest_statement (column_classifier -> dedup hash)
+    Pipeline->>DB: Write to raw_applicants, raw_transactions, statement_uploads
+    Airflow->>Airflow: Trigger run_dbt_transforms DAG
+    Airflow->>dbt: dbt run --select path:models/staging path:models/intermediate
+    dbt->>DB: Build stg_* and int_* models
+    Airflow->>Airflow: Trigger data_quality_check DAG
+    Airflow->>dbt: dbt test (foreign keys, non-null, unique constraints)
+
+    Note over Airflow, Marts: Daily / Scheduled Underwriting & Scoring Refresh
+    Airflow->>Airflow: Trigger generate_reports DAG (@daily)
+    Airflow->>dbt: dbt seed & dbt run --select path:models/marts
+    dbt->>Marts: Compute Credit Scores (300-900), Risk Tiers & Fraud Flags
+    Airflow->>DB: Log execution outcome to pipeline_audit
 ```
 
-#### API Surface (`/api/v1/...`)
+### dbt Data Lineage (Column-Level Flow)
 
-| Route prefix | Handler file | Key endpoints |
-|---|---|---|
-| `/auth` | `auth.py` | `POST /login`, `POST /refresh` |
-| `/upload` | `upload.py` | `POST /bank-statement` |
-| `/applications` | `applications.py` | `POST /`, `GET /`, `GET /{id}` |
-| `/decisions` | `decisions.py` | `POST /analyst`, `POST /manager`, `POST /admin` |
-| `/credit-scores` | `credit_scores.py` | `GET /`, `GET /{applicant_id}` |
-| `/eligibility` | `eligibility.py` | `GET /`, `GET /{applicant_id}` |
-| `/analyst` | `analyst.py` | `GET /queue`, `GET /applicant/{id}` |
-| `/manager` | `manager.py` | `GET /escalations`, `GET /reports` |
-| `/admin` | `admin.py` | `GET /users`, `PUT /loan-config`, `GET /audit-log` |
-| `/chatbot` | `chatbot.py` | `POST /message` |
-| `/users` | `users.py` | `GET /me`, `PUT /me` |
+```mermaid
+graph LR
+    subgraph Raw Sources
+        R1[raw_applicants]
+        R2[raw_transactions]
+        R3[stg_rbi_rates]
+        R4[seed_merchant_categories]
+    end
+
+    subgraph Staging Layer
+        S1[stg_applicants]
+        S2[stg_transactions]
+        S3[stg_merchant_categories]
+        S4[stg_rbi_rates]
+    end
+
+    subgraph Intermediate Layer
+        I1[int_transactions_categorized]
+        I2[int_monthly_income_summary]
+        I3[int_monthly_obligation_summary]
+        I4[int_bounce_history]
+        I5[int_spending_by_category]
+        I6[int_balance_trends]
+        I7[int_combined_signals]
+    end
+
+    subgraph Data Marts
+        M1[mart_credit_score]
+        M2[mart_fraud_flags]
+        M3[mart_loan_eligibility]
+        M4[mart_risk_segmentation]
+        M5[mart_underwriter_report]
+        M6[mart_monthly_credit_trend]
+    end
+
+    R1 --> S1
+    R2 --> S2
+    R4 --> S3
+    R3 --> S4
+
+    S2 & S3 --> I1
+    S2 --> I2
+    S2 --> I3
+    S2 --> I4
+    I1 --> I5
+    S2 --> I6
+
+    S1 & I2 & I3 & I4 & I5 & I6 --> I7
+
+    I7 --> M1
+    I7 --> M2
+    I7 & S4 --> M3
+    M1 --> M4
+    M1 & M2 & I7 --> M5
+    M1 --> M6
+```
 
 #### Middleware Stack
 
@@ -126,68 +234,6 @@ Request
   --> Route handler
   --> Response
 ```
-
-#### Authentication
-
-JWT-based with role claims. The `require_role()` dependency validates the token and asserts the caller's role. Roles: `admin`, `manager`, `analyst`, `applicant`.
-
-Token flow:
-```
-POST /api/v1/auth/login
-  --> validates email + bcrypt password
-  --> returns access_token (JWT, 30 min) + refresh_token
-POST /api/v1/auth/refresh
-  --> validates refresh_token
-  --> returns new access_token
-```
-
----
-
-### Frontend — React + Vite
-
-The frontend is a TypeScript React SPA located at `frontend/src/`.
-
-#### Directory Structure
-
-```
-frontend/src/
-  pages/
-    LoginPage.tsx             -- Email/password login
-    RegisterPage.tsx          -- Applicant self-registration
-    ApplicantDashboard.tsx    -- Applicant home: upload, apply, status
-    AnalystDashboard.tsx      -- Analyst queue, credit scores, decisions
-    ManagerDashboard.tsx      -- Manager escalations, reports
-    AdminDashboard.tsx        -- Admin: user management, loan config, logs
-    portal/                   -- Applicant sub-pages (upload, applications)
-    analyst/                  -- Analyst sub-pages (applicant deep-dive)
-    manager/                  -- Manager sub-pages (escalation detail)
-    admin/                    -- Admin sub-pages (config, audit)
-  components/
-    DashboardShell.tsx        -- Sidebar + header layout wrapper
-    ProfileModal.tsx          -- User profile editor
-    ChatbotPanel.tsx          -- Floating AI assistant panel
-  contexts/                   -- React context (AuthContext, ThemeContext)
-  hooks/                      -- Custom hooks (useAuth, useFetch, etc.)
-  services/                   -- API client functions
-  types/                      -- TypeScript interfaces
-  utils/                      -- Formatters, validators
-```
-
-#### Role-Scoped Routing
-
-The app renders a different dashboard based on the authenticated user's role:
-
-```
-/login        --> LoginPage
-/register     --> RegisterPage (applicants only)
-/             --> redirect based on role:
-                    applicant --> ApplicantDashboard
-                    analyst   --> AnalystDashboard
-                    manager   --> ManagerDashboard
-                    admin     --> AdminDashboard
-```
-
-Each dashboard is a shell with a sidebar navigation and lazy-loaded sub-pages.
 
 ---
 
@@ -204,7 +250,7 @@ Each dashboard is a shell with a sidebar navigation and lazy-loaded sub-pages.
 | `statement_uploads` | File-level upload metadata (hash, reconciliation verdict) |
 | `format_registry` | Known bank CSV format cache (header set -> column mapping) |
 | `format_review_queue` | Rejected/warned uploads awaiting human review |
-| `decisions` | Append-only decision log (approved/rejected/escalated) |
+| `decisions` | Append-only human underwriter decision log (approved/rejected/escalated) — also exposed as the `decisions` dbt mart |
 | `audit_log` | Every mutation with old/new values (JSONB) |
 | `loan_type_config` | Per-loan-type thresholds: min_score, max_amount, escalation bands |
 | `rbi_rates` | RBI repo rate (ingested by Airflow DAG) |
@@ -228,12 +274,14 @@ Intermediate (int_*)
   int_combined_signals           -- unified per-applicant signal row
 
 Marts (mart_*)
-  mart_credit_score          -- credit score 0-100 with component breakdown
+  mart_credit_score          -- credit score 300-900 with component breakdown
   mart_loan_eligibility      -- eligible amount per loan type per applicant
   mart_fraud_flags           -- fraud signal flags
   mart_monthly_credit_trend  -- monthly credit health time series
   mart_risk_segmentation     -- risk tier: low / medium / high
   mart_underwriter_report    -- flat underwriter summary row
+  mart_pipeline_audit        -- DAG run history: rows_processed, status, failures
+  decisions                  -- human underwriter decision log (approved/rejected/escalated)
 ```
 
 ---
@@ -245,10 +293,12 @@ Airflow runs in **LocalExecutor** mode (no Redis/Celery worker needed).
 | DAG | Schedule | What it does |
 |---|---|---|
 | `ingest_statements` | `@hourly` | Reads CSVs from landing zone, runs ingestion pipeline, bulk-inserts to raw_transactions, triggers dbt |
-| `run_dbt_transforms` | Triggered | Runs `dbt run` for staging + intermediate models, triggers data_quality_check |
-| `data_quality_check` | Triggered | Runs `dbt test` assertions |
-| `generate_reports` | On-demand | Refreshes mart tables |
-| `ingest_rbi_rates` | Scheduled | Fetches latest RBI repo rate |
+| `run_dbt_transforms` | Triggered (post-ingest) | Runs `dbt run` for staging + intermediate models, triggers data_quality_check |
+| `data_quality_check` | Triggered (post-transform) | Runs `dbt test` assertions |
+| `generate_reports` | `@daily` (midnight) | Recomputes marts: credit scores, eligibility, risk, fraud flags |
+| `ingest_rbi_rates` | `@weekly` | Refreshes RBI benchmark rates (repo, MSF, loan benchmarks) into `stg_rbi_rates` |
+
+All five DAGs log execution outcome (`run_id`, `rows_processed`, `status`, `failures`) to the `pipeline_audit` table, which is surfaced as `mart_pipeline_audit`.
 
 ---
 
@@ -260,26 +310,6 @@ Airflow runs in **LocalExecutor** mode (no Redis/Celery worker needed).
 | `analyst` | Credit officers | View applicant queue, read credit scores, approve/reject applications (within score bands), escalate to manager |
 | `manager` | Senior officers | Handle escalated applications, approve high-value loans, view reports, escalate to admin |
 | `admin` | Platform admins | Full user management, loan type configuration, audit log access, admin overrides on any application |
-
----
-
-### Decision Engine & Escalation Rules
-
-The `DecisionService` enforces escalation rules **at the service layer**, not in routes:
-
-```
-Score > 65  --> Analyst MAY approve directly
-Score < 45  --> Analyst MAY reject directly
-Score 45-65 --> MUST escalate to Manager (EscalationRequiredError)
-Any fraud flag present --> MUST escalate regardless of score
-Loan amount > manager_threshold_amount --> MUST escalate to Manager
-```
-
-Managers can override analyst decisions and escalate further to Admin. Admins can issue an `AdminOverride` on any application.
-
-All decisions are **append-only** (`DecisionRepository.insert` only, no updates). Every decision writes an `audit_log` entry with `old_value` and `new_value` as JSONB.
-
-Loan type thresholds (`loan_type_config`) are configurable by admins at runtime without code changes.
 
 ---
 
@@ -473,19 +503,6 @@ score = 0.5 * header_score + 0.5 * value_content_score
 | `_date_parse_rate(series)` | Fraction of first 50 non-null values parseable as dates |
 | `_numeric_parse_rate(series)` | Fraction parseable as a number (strips commas, parentheses) |
 | `_type_flag_rate(series)` | Fraction that look like DR, CR, Debit, Credit variants |
-
-##### Decoy Detection
-
-A dedicated guard prevents serial/index columns from polluting amount or date roles:
-
-```python
-_DECOY_PATTERNS = re.compile(
-    r"^(sl[\s._-]*no\.?|serial[\s._-]*no\.?|ref[\s._-]*no\.?|
-       cheque[\s._-]*no\.?|day|month|year|chq[\s._-]*no\.?|...)$"
-)
-```
-
-Additionally, any column that is a **strictly increasing integer sequence from 0 or 1** (data-driven check) receives a **0.4x penalty multiplier** on its final score, regardless of its column name.
 
 ##### Classification Order (guardrails matter)
 
@@ -681,6 +698,16 @@ Generates reporting-layer mart tables on demand.
 
 Fetches current RBI repo rate data and loads into `rbi_rates` table, used in `mart_loan_eligibility` calculation.
 
+#### DAG File Reference
+
+| DAG | Schedule | File |
+|---|---|---|
+| `ingest_statements` | `@hourly` | `backend/airflow/dags/ingest_statements.py` |
+| `ingest_rbi_rates` | `@weekly` | `backend/airflow/dags/ingest_rbi_rates.py` |
+| `run_dbt_transforms` | Triggered | `backend/airflow/dags/run_dbt_transforms.py` |
+| `data_quality_check` | Triggered | `backend/airflow/dags/data_quality_check.py` |
+| `generate_reports` | `@daily` | `backend/airflow/dags/generate_reports.py` |
+
 ### 6. Transform Layer — dbt
 
 All dbt models live in `dbt/loanlens/models/`. Three layers following the medallion architecture: staging -> intermediate -> marts.
@@ -716,12 +743,16 @@ Analyst-facing, pre-aggregated tables. These are what the FastAPI services read 
 
 | Model | Inputs | Output |
 |---|---|---|
-| `mart_credit_score` | `int_combined_signals` | Single credit score (0-100) per applicant with component breakdown |
-| `mart_loan_eligibility` | `int_combined_signals`, `stg_rbi_rates` | Loan eligibility per loan type with max eligible amount |
-| `mart_fraud_flags` | `int_combined_signals`, `int_bounce_history` | Fraud signal flags (round-trip transfers, cash cycling, unusual patterns) |
-| `mart_monthly_credit_trend` | `int_monthly_income_summary`, `int_balance_trends` | Monthly credit health trend for time-series charts |
-| `mart_risk_segmentation` | `mart_credit_score` | Risk tier (low / medium / high) per applicant |
-| `mart_underwriter_report` | All marts | Flattened underwriter view with all signals in one row |
+| `mart_credit_score` | `int_combined_signals` | Credit score **300–900** with breakdown: `income_stability`, `emi_burden`, `bounce_score`, `balance_score`, and a `recommendation` (`approve`/`review`/`reject`) |
+| `mart_loan_eligibility` | `int_combined_signals`, `stg_rbi_rates` | `eligible_amount`, `applied_amount`, `gap_amount`, `gap_reason`, `decision` (`approve`/`partial`/`reject`) |
+| `mart_fraud_flags` | `int_combined_signals`, `int_bounce_history` | `flag_type` (salary break, suspicious velocity, bounce surge), `severity` (`low`/`med`/`high`) |
+| `mart_monthly_credit_trend` | `int_monthly_income_summary`, `int_balance_trends` | `month`, `score`, `trend_direction` (`up`/`down`/`flat`) |
+| `mart_risk_segmentation` | `mart_credit_score` | `risk_tier` (`low` / `medium` / `high`) per applicant |
+| `mart_underwriter_report` | `mart_credit_score`, `mart_fraud_flags`, `int_combined_signals` | Flattened view: `avg_monthly_income`, `emi_burden_ratio`, `bounce_count`, `risk_segment`, `fraud_flags` |
+| `mart_pipeline_audit` | `pipeline_audit` (Airflow-written) | Operational SLA log: `run_id`, `dag_name`, `rows_processed`, `status`, `failures` |
+| `decisions` | Human underwriter input via FastAPI | `decision_id`, `applicant_id`, `decision` (`approved`/`rejected`/`escalated`), `notes` |
+
+> Note: `decisions` is written by human underwriters through the FastAPI override endpoints (Underwriter Queue UI), not derived purely from upstream dbt models — it's the manual audit trail for score overrides.
 
 ### 7. Format Registry & Promotion Policy
 
@@ -759,87 +790,60 @@ New bank file uploaded
     --> next upload from same bank --> registry hit --> skip classifier
 ```
 
-### 8. Architectural Principles
+### 8. Presentation & Consumption Layer
 
-1. **No hardcoded bank names** — `format_registry` is an optional speed cache. Any file from any bank can be processed without a registry entry.
-
-2. **Balance reconciliation is the correctness oracle** — The `reconcile()` function validates the column mapping independently. A mapping that produces wrong amount signs or wrong column assignments will fail reconciliation before any bad data reaches the raw layer.
-
-3. **Stable sort is mandatory** — `kind="mergesort"` on `txn_date` preserves same-day transaction file order. An unstable sort would reorder same-day rows, producing false balance mismatches and incorrect reconciliation failures.
-
-4. **dbt is a pure type-cast + analytics layer** — Zero bank-specific logic lives in SQL. All format normalisation happened upstream in the Python ingestion pipeline.
-
-5. **Review queue closes the feedback loop** — Every rejected or warned file routes to `format_review_queue`. No new bank is silently rejected forever.
-
-6. **Idempotent inserts at every layer** — `ON CONFLICT DO NOTHING` on `raw_transactions` (by `raw_id`) and `raw_applicants` (by `applicant_ref`) means every pipeline step can be safely retried.
-
-7. **Amounts are always positive, direction is always explicit** — All amounts stored as `Decimal` positives; `txn_type IN ('debit', 'credit')` encodes direction. This makes SQL aggregation unambiguous.
-
-8. **Confidence is conservative** — `ColumnMapping.confidence = min(all_role_scores)`. If any single role has a weak mapping, the overall confidence drops.
-
-### 9. Feature Summary
-
-#### Inputs Accepted
-
-| Format | Example banks | Detection method |
-|---|---|---|
-| **Flagged** — amount + DR/CR column | Axis Bank, HDFC Bank | `txn_type` column with DR/CR values + single amount column |
-| **Split** — separate Debit / Credit columns | SBI, Kotak Mahindra | Two sparse-numeric columns |
-| **Signed** — single signed-amount column | Various online banks | Single amount column, negative = debit |
-| **Any encoding** | UTF-8-BOM (Excel exports), Latin-1 | Tried in sequence |
-| **Any preamble** | Axis Bank (account details on top) | Header-row detection scans first 30 rows |
-
-#### Outputs Produced (from raw_transactions via dbt)
-
-| Output | Where used |
-|---|---|
-| Credit score (0-100) | Analyst dashboard, decision engine |
-| Loan eligibility per loan type | Applicant portal, manager dashboard |
-| Fraud flags | Escalation engine, analyst dashboard |
-| Monthly income trend | Underwriter report |
-| Monthly obligation summary | Loan eligibility, credit score |
-| Balance trends | Credit score, underwriter report |
-| Bounce history | Fraud flags, credit score |
-| Spending by category | Analyst dashboard |
-| Risk tier (low/medium/high) | Manager dashboard, routing |
-| Underwriter report | Manager single-applicant deep-dive |
-
-#### Guarantees
-
-| Guarantee | Implementation |
-|---|---|
-| No duplicate files per applicant | SHA-256 + UNIQUE(applicant_id, file_hash) on statement_uploads |
-| No duplicate rows across overlapping uploads | UUID5 raw_id + ON CONFLICT DO NOTHING on raw_transactions |
-| Balance correctness validation | reconcile() with +/-0.01 tolerance, 98%/85% thresholds |
-| Same-day transaction order preserved | mergesort on txn_date |
-| Pipeline is retryable | All DB inserts are idempotent |
-| Bad mappings surfaced for review | format_review_queue on any failure/warn |
-| New banks eventually supported | format_registry promotion after human review |
+1. **FastAPI Backend** (`backend/app`) — REST endpoints for score lookups, format classifier registry additions, statement upload parsing, and manual decision overrides.
+2. **React Frontend** (`frontend/src`):
+   - **Applicant Portal** — real-time credit score gauges (300–900), sub-score breakdowns, active loan eligibility status.
+   - **Analyst / Underwriter Queue** — high-risk alerts, fraud indicator timelines, override actions.
+3. **Metabase BI** — connects directly to the `marts` PostgreSQL schema for operational analytics, DAG performance monitoring (via `mart_pipeline_audit`), and portfolio risk distribution.
 
 ---
 
-## Quick Start (Docker)
+## Running the Project (Local Dev)
 
-From the repository root:
+Postgres + Airflow run via Docker; FastAPI and the frontend run natively for faster iteration.
+
+### Terminal 1: Database & Airflow (Docker)
+
+Run this once to start the database and scheduler in the background:
 
 ```powershell
-# 1. Ensure backend/.env exists (copy from example if needed)
-Copy-Item backend\.env.example backend\.env
+docker compose up -d
+```
 
-# 2. Reset DB if you had an older init.sql schema (first time or after Phase 0 fix)
-docker compose down -v
+### Terminal 2: Backend (FastAPI)
 
-# 3. Start core infra
-docker compose up -d postgres redis
+```powershell
+cd d:\LoanLens\backend
+.\.venv\Scripts\Activate.ps1
+uvicorn app.main:app --reload
+```
 
-# 4. Run migrations + seed users + start API
-docker compose up -d --build fastapi
+### Terminal 3: Frontend (Vite)
 
-# 5. Generate raw data (~500 applicants, ~180K transactions)
-docker compose exec fastapi python -m scripts.generate_raw_data --load
+```powershell
+cd d:\LoanLens\frontend
+npm run dev
+```
 
-# 6. Start Airflow + frontend + Metabase (optional full stack)
-docker compose up -d --build airflow-init airflow-webserver airflow-scheduler airflow-worker frontend metabase
+### 📊 (Optional) Terminal 4: Dashboards (Metabase)
+
+If you want to view or edit Metabase dashboards:
+
+```powershell
+cd d:\LoanLens\metabase
+java -jar metabase.jar
+```
+
+### 🔧 (Optional) dbt Commands
+
+If you update dbt SQL models and want to compile them:
+
+```powershell
+# Open terminal inside: d:\LoanLens\dbt\loanlens
+# Make sure .venv is activated
+D:\LoanLens\backend\.venv\Scripts\dbt.exe run --project-dir D:\LoanLens\dbt\loanlens --profiles-dir D:\LoanLens\dbt\loanlens --target dev
 ```
 
 ---
@@ -855,64 +859,3 @@ docker compose up -d --build airflow-init airflow-webserver airflow-scheduler ai
 | Postgres | localhost:5432        |
 
 **Airflow login:** `admin` / `admin`
-
----
-
-## Seed Users (login)
-
-| Role      | Email                 | Password      |
-|-----------|-----------------------|---------------|
-| Admin     | admin@loanlens.in     | Admin@123     |
-| Manager   | manager@loanlens.in   | Manager@123   |
-| Analyst   | analyst@loanlens.in   | Analyst@123   |
-| Applicant | applicant@loanlens.in | Applicant@123 |
-
----
-
-## Local Development (without full Docker)
-
-```powershell
-# Postgres must be running via Docker on port 5432
-cd backend
-pip install -r requirements.txt
-alembic upgrade head
-python -m scripts.seed_users
-python -m scripts.generate_raw_data --load
-python -m scripts.check_db
-uvicorn app.main:app --reload --port 8000
-```
-
----
-
-## dbt (staging layer)
-
-```powershell
-pip install dbt-core dbt-postgres
-$env:DBT_HOST="127.0.0.1"
-$env:DBT_PORT="5432"
-$env:DBT_USER="postgres"
-$env:DBT_PASSWORD="admin"
-$env:DBT_DBNAME="loanlens_db"
-dbt seed --project-dir dbt/loanlens --profiles-dir dbt/loanlens --target dev
-dbt run  --project-dir dbt/loanlens --profiles-dir dbt/loanlens --target dev --select path:models/staging
-dbt test --project-dir dbt/loanlens --profiles-dir dbt/loanlens --target dev
-```
-
----
-
-## Troubleshooting
-
-**`relation "users" already exists` on startup**
-→ Old Postgres volume has pre-Alembic schema. Run `docker compose down -v` and start fresh.
-
-**Port 5432 already in use**
-→ Stop other Postgres instances or change the host port in `docker-compose.yml`.
-
-**Airflow tasks stuck in queued**
-→ Ensure `airflow-worker` container is running.
-
-**dbt source not found**
-→ Run `alembic upgrade head` and `python -m scripts.generate_raw_data --load` first.
-
-**Upload returns `low_confidence` or `reconciliation_failed`**
-→ Check `format_review_queue` table for the `detected_headers` and `sample_rows`. Use the admin UI to review the proposed mapping and promote it to `format_registry`.
