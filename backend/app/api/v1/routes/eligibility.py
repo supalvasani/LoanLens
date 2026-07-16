@@ -4,10 +4,8 @@ Applicant-only. applicant_id always from JWT — never from URL or body.
 Returns all 6 loan types with eligibility data from mart_loan_eligibility.
 Gracefully returns empty list when dbt hasn't run yet.
 """
-from __future__ import annotations
 
 from decimal import Decimal
-from typing import Annotated
 
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
@@ -77,8 +75,8 @@ class EligibilityResponse(BaseModel):
 @limiter.limit("60/minute")
 async def get_my_eligibility(
     request: Request,
-    current_user: Annotated[User, Depends(require_role(RoleEnum.applicant))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: User = Depends(require_role(RoleEnum.applicant)),
+    db: AsyncSession = Depends(get_db),
 ) -> EligibilityResponse:
     """
     Returns mart_loan_eligibility for the authenticated applicant across

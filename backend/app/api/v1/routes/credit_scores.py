@@ -3,10 +3,9 @@
 Applicant-only. applicant_id is always resolved from JWT via raw_applicants.
 No applicant_id is accepted in the request body or URL.
 """
-from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Any
+from typing import Any
 
 from fastapi import APIRouter, Depends, Request, status
 from pydantic import BaseModel
@@ -112,8 +111,8 @@ async def _resolve_applicant_id(user: User, mart: MartRepository) -> str | None:
 @limiter.limit("60/minute")
 async def get_my_credit_score(
     request: Request,
-    current_user: Annotated[User, Depends(require_role(RoleEnum.applicant))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: User = Depends(require_role(RoleEnum.applicant)),
+    db: AsyncSession = Depends(get_db),
 ) -> CreditScoreResponse:
     """
     Returns the mart_credit_score for the authenticated applicant.
@@ -179,8 +178,8 @@ async def get_my_credit_score(
 @limiter.limit("60/minute")
 async def get_my_credit_trend(
     request: Request,
-    current_user: Annotated[User, Depends(require_role(RoleEnum.applicant))],
-    db: Annotated[AsyncSession, Depends(get_db)],
+    current_user: User = Depends(require_role(RoleEnum.applicant)),
+    db: AsyncSession = Depends(get_db),
 ) -> CreditTrendResponse:
     """
     Returns the last 6 months from mart_monthly_credit_trend.

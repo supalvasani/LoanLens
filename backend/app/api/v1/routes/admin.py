@@ -46,9 +46,9 @@ async def list_users(
     request: Request,
     current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
     db: Annotated[AsyncSession, Depends(get_db)],
-    role: Annotated[RoleEnum | None, Query(default=None)] = None,
-    limit: Annotated[int, Query(default=100, ge=1, le=500)] = 100,
-    offset: Annotated[int, Query(default=0, ge=0)] = 0,
+    role: Annotated[RoleEnum | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[AdminUserResponse]:
     try:
         return await AdminService(db).list_users(current_user, role=role, limit=limit, offset=offset)
@@ -179,11 +179,11 @@ async def get_audit_log(
     request: Request,
     current_user: Annotated[User, Depends(require_role(RoleEnum.admin))],
     db: Annotated[AsyncSession, Depends(get_db)],
-    user_id: Annotated[UUID | None, Query(default=None)] = None,
-    action: Annotated[str | None, Query(default=None)] = None,
-    target_type: Annotated[str | None, Query(default=None)] = None,
-    limit: Annotated[int, Query(default=100, ge=1, le=500)] = 100,
-    offset: Annotated[int, Query(default=0, ge=0)] = 0,
+    user_id: Annotated[UUID | None, Query()] = None,
+    action: Annotated[str | None, Query()] = None,
+    target_type: Annotated[str | None, Query()] = None,
+    limit: Annotated[int, Query(ge=1, le=500)] = 100,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[AuditLogEntryResponse]:
     try:
         return await AdminService(db).get_audit_log(

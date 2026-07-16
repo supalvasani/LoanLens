@@ -52,10 +52,10 @@ async def apply_for_loan(
     request: Request,
     current_user: Annotated[User, Depends(require_role(RoleEnum.applicant))],
     db: Annotated[AsyncSession, Depends(get_db)],
-    loan_type: Annotated[LoanTypeEnum | None, Form(default=None)] = None,
-    amount_requested: Annotated[Decimal | None, Form(default=None)] = None,
-    purpose: Annotated[str | None, Form(default=None)] = None,
-    bank_statement_csv: Annotated[UploadFile | None, File(default=None)] = None,
+    loan_type: Annotated[LoanTypeEnum | None, Form()] = None,
+    amount_requested: Annotated[Decimal | None, Form()] = None,
+    purpose: Annotated[str | None, Form()] = None,
+    bank_statement_csv: Annotated[UploadFile | None, File()] = None,
 ) -> LoanApplicationResponse:
     content_type = request.headers.get("content-type", "")
     if "application/json" in content_type:
@@ -117,9 +117,9 @@ async def list_applications(
     request: Request,
     current_user: Annotated[User, Depends(get_current_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
-    status_filter: Annotated[ApplicationStatusEnum | None, Query(default=None, alias="status")] = None,
-    limit: Annotated[int, Query(default=50, ge=1, le=200)] = 50,
-    offset: Annotated[int, Query(default=0, ge=0)] = 0,
+    status_filter: Annotated[ApplicationStatusEnum | None, Query(alias="status")] = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> list[LoanApplicationResponse]:
     """
     Role-based visibility:

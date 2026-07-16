@@ -2,6 +2,7 @@ import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi import _rate_limit_exceeded_handler
@@ -28,6 +29,24 @@ app = FastAPI(
 
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    logger.error(
+        "request_validation_error",
+        extra={"path": request.url.path, "detail": str(exc.errors())},
+    )
+    return JSONResponse(status_code=422, content={"detail": exc.errors()})
+
+
+@app.exception_handler(ResponseValidationError)
+async def response_validation_exception_handler(request: Request, exc: ResponseValidationError):
+    logger.error(
+        "response_validation_error",
+        extra={"path": request.url.path, "detail": str(exc.errors())},
+    )
+    return JSONResponse(status_code=422, content={"detail": str(exc.errors())})
 
 app.add_middleware(
     CORSMiddleware,
