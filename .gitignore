@@ -62,8 +62,6 @@ Thumbs.db
 !.vscode/extensions.json
 .idea/
 
-# Metabase Local Download
-metabase/
 
 # dbt Build, Credentials & Generated Artifacts
 dbt/loanlens/target/
