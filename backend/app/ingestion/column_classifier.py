@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
+from difflib import SequenceMatcher
 
 import pandas as pd
 
@@ -16,14 +17,15 @@ import pandas as pd
 
 _DATE_KEYWORDS = {
     "date", "txn_date", "transaction date", "value date", "posting date",
-    "tran date", "trans date", "dt",
+    "tran date", "trans date", "value dt", "transaction dt", "post date", "dt",
 }
 _AMOUNT_KEYWORDS = {
     "amount", "txn amount", "transaction amount", "tran amt", "amt",
     "withdrawal", "deposit",
 }
-_DEBIT_KEYWORDS = {"debit", "dr", "withdrawal amt", "debit amount", "debit amt"}
 _CREDIT_KEYWORDS = {"credit", "cr", "deposit amt", "credit amount", "credit amt"}
+_DEBIT_KEYWORDS = {"debit", "dr", "withdrawal", "withdrawal amt", "debit amount", "debit amt"}
+_CREDIT_KEYWORDS = {"credit", "cr", "deposit", "deposit amt", "deposit amount", "credit amount", "credit amt"}
 _BALANCE_KEYWORDS = {
     "balance", "balance after", "balance_after", "closing balance",
     "available balance", "running balance", "bal",
@@ -61,6 +63,8 @@ _DECOY_PATTERNS = re.compile(
 # Canonical Dr/Cr flag variants (for value-content check of txn_type role)
 _DR_VARIANTS = re.compile(r"^(dr|db|d|debit)$", re.IGNORECASE)
 _CR_VARIANTS = re.compile(r"^(cr|c|credit)$", re.IGNORECASE)
+_NUMERIC_TOKEN = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
+_AMOUNT_DECORATIONS = re.compile(r"(?i)\b(?:inr|usd|eur|gbp|dr|cr)\b")
 
 
 # ── Output dataclass ──────────────────────────────────────────────────────────
@@ -115,6 +119,13 @@ def _keyword_score(col: str, keyword_set: set[str]) -> float:
     for kw in keyword_set:
         if kw in lower:
             return 0.7
+    normalized_col = re.sub(r"[^a-z0-9]+", "", lower)
+    for kw in keyword_set:
+        normalized_kw = re.sub(r"[^a-z0-9]+", "", kw.lower())
+        if len(normalized_col) >= 5 and len(normalized_kw) >= 5:
+            similarity = SequenceMatcher(None, normalized_col, normalized_kw).ratio()
+            if similarity >= 0.80:
+                return 0.8
     return 0.0
 
 
@@ -123,14 +134,17 @@ def _date_parse_rate(series: pd.Series) -> float:
     sample = series.dropna().astype(str).head(50)
     if len(sample) == 0:
         return 0.0
-    parsed = 0
+    parsed_count = 0
     for val in sample:
         v = val.strip()
         if not v:
             continue
-        if pd.to_datetime(v, dayfirst=True, errors="coerce") is not pd.NaT:
-            parsed += 1
-    return parsed / len(sample)
+        parsed_date = pd.to_datetime(v, errors="coerce")
+        if pd.isna(parsed_date):
+            parsed_date = pd.to_datetime(v, dayfirst=True, errors="coerce")
+        if not pd.isna(parsed_date):
+            parsed_count += 1
+    return parsed_count / len(sample)
 
 
 def _numeric_parse_rate(series: pd.Series, ignore_blanks: bool = False) -> float:
@@ -142,9 +156,12 @@ def _numeric_parse_rate(series: pd.Series, ignore_blanks: bool = False) -> float
         return 0.0
     parsed = 0
     for val in sample:
-        v = val.strip().replace(",", "").replace("(", "-").replace(")", "")
+        v = val.strip()
+        cleaned = _AMOUNT_DECORATIONS.sub("", v)
+        cleaned = cleaned.replace(",", "").replace("(", "-").replace(")", "")
+        cleaned = re.sub(r"[\s₹$€£]", "", cleaned)
         try:
-            float(v)
+            float(cleaned)
             parsed += 1
         except ValueError:
             pass

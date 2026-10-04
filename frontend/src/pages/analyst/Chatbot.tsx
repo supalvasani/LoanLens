@@ -276,8 +276,9 @@ export default function AnalystChatbot() {
               </button>
             </div>
           </div>
-          <div style={{ marginTop: 8, fontSize: 11, color: 'var(--t3)' }}>
-            Rate limited to 10 requests/minute · All queries are logged
+          <div style={{ marginTop: 8, fontSize: 11, color: 'var(--t3)', display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+            <span>Rate limited to 10 requests/minute · All queries are logged</span>
+            <span style={{ fontStyle: 'italic' }}>Disclaimer: LoanBot provides informational summaries from database records. It does not make credit decisions or provide financial advice.</span>
           </div>
         </div>
       </div>

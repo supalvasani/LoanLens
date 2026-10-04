@@ -160,7 +160,7 @@ sequenceDiagram
     Note over Airflow, Marts: Daily / Scheduled Underwriting & Scoring Refresh
     Airflow->>Airflow: Trigger generate_reports DAG (@daily)
     Airflow->>dbt: dbt seed & dbt run --select path:models/marts
-    dbt->>Marts: Compute Credit Scores (300-900), Risk Tiers & Fraud Flags
+    dbt->>Marts: Compute Credit Scores (0-100), Risk Tiers & Fraud Flags
     Airflow->>DB: Log execution outcome to pipeline_audit
 ```
 
@@ -275,7 +275,7 @@ Intermediate (int_*)
   int_combined_signals           -- unified per-applicant signal row
 
 Marts (mart_*)
-  mart_credit_score          -- credit score 300-900 with component breakdown
+  mart_credit_score          -- credit score 0-100 with component breakdown
   mart_loan_eligibility      -- eligible amount per loan type per applicant
   mart_fraud_flags           -- fraud signal flags
   mart_monthly_credit_trend  -- monthly credit health time series

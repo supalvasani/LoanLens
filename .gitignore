@@ -21,6 +21,9 @@ env/
 *.env.*
 **/.env
 **/.env.*
+!.env.example
+!**/.env.example
+
 
 # Private Keys, SSL Certificates & Auth Tokens
 *.pem

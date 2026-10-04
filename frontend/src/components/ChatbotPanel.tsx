@@ -152,8 +152,9 @@ export function ChatbotPanel({ mode, placeholder }: Readonly<ChatbotProps>) {
           Send
         </button>
       </div>
-      <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 6 }}>
-        Press Enter to send · Shift+Enter for new line
+      <div style={{ fontSize: 11, color: 'var(--t3)', marginTop: 6, display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 6 }}>
+        <span>Press Enter to send · Shift+Enter for new line</span>
+        <span style={{ fontStyle: 'italic' }}>Disclaimer: LoanBot provides informational summaries from database records. It does not make credit decisions or provide financial advice.</span>
       </div>
     </div>
   );

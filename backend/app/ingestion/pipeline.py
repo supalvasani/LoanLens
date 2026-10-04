@@ -13,6 +13,7 @@ but never breaks ingestion.
 from __future__ import annotations
 
 import io
+import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import date, datetime
@@ -31,7 +32,7 @@ from app.ingestion.reconcile import reconcile
 # ── Configuration ─────────────────────────────────────────────────────────────
 
 MIN_DATA_ROWS = 3
-MIN_CONFIDENCE = 0.55
+MIN_CONFIDENCE = 0.70
 MAX_UNPARSE_RATE = 0.10   # >10% core fields unparseable → reject
 
 
@@ -87,24 +88,43 @@ def _parse_date(val: str) -> date | None:
     return None
 
 
-def _parse_amount(val: str) -> Decimal | None:
-    """Parse a numeric string, stripping commas and parenthetical suffixes."""
-    val = val.strip()
-    if not val:
+_AMOUNT_TOKEN = re.compile(r"[-+]?\d[\d,]*(?:\.\d+)?")
+
+
+def _parse_decimal_token(val: str) -> tuple[Decimal, bool] | None:
+    """Extract a decimal token and whether accounting notation made it negative."""
+    value = str(val or "").strip()
+    if not value:
         return None
-    # Remove trailing annotation e.g. "12,345.00 (Low Balance)"
-    val = val.split("(")[0].strip()
-    val = val.replace(",", "")
+    parenthesized = value.startswith("(") and value.endswith(")")
+    trailing_minus = value.endswith("-")
+    match = _AMOUNT_TOKEN.search(value)
+    if not match:
+        return None
     try:
-        d = Decimal(val)
-        return abs(d)   # store amounts as positive; txn_type encodes direction
+        number = Decimal(match.group(0).replace(",", ""))
     except InvalidOperation:
         return None
+    return number, parenthesized or trailing_minus
+
+
+def _parse_amount(val: str) -> Decimal | None:
+    """Parse currency, comma-separated, signed, and accounting-style amounts."""
+    parsed = _parse_decimal_token(val)
+    return abs(parsed[0]) if parsed else None
+
+
+def _parse_signed_amount(val: str) -> Decimal | None:
+    parsed = _parse_decimal_token(val)
+    if not parsed:
+        return None
+    number, is_negative = parsed
+    return -abs(number) if is_negative else number
 
 
 def _normalise_txn_type(raw: str) -> str | None:
     """Map Dr/Cr variants to canonical 'debit'/'credit'."""
-    v = raw.strip().lower()
+    v = re.sub(r"[^a-z]", "", str(raw or "").strip().lower())
     if v in ("dr", "db", "d", "debit"):
         return "debit"
     if v in ("cr", "c", "credit"):
@@ -133,13 +153,11 @@ def _extract_split_amount(row, mapping: ColumnMapping) -> tuple[Decimal | None, 
 
 def _extract_signed_amount(row, mapping: ColumnMapping) -> tuple[Decimal | None, str | None, bool]:
     raw_amt = str(row.get(mapping.amount_cols[0], "") or "")
-    clean = raw_amt.strip().replace(",", "")
-    try:
-        signed = Decimal(clean)
-        txn_type = "credit" if signed >= 0 else "debit"
-        return abs(signed), txn_type, False
-    except InvalidOperation:
+    signed = _parse_signed_amount(raw_amt)
+    if signed is None:
         return None, None, False
+    txn_type = "credit" if signed >= 0 else "debit"
+    return abs(signed), txn_type, False
 
 
 def _extract_amount_and_type(row, mapping: ColumnMapping) -> tuple[Decimal | None, str | None, bool]:

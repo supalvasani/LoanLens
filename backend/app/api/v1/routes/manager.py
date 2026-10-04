@@ -70,12 +70,12 @@ async def get_escalated_application(
 @router.get(
     "/portfolio",
     status_code=status.HTTP_200_OK,
-    summary="Manager: view portfolio aggregated analytics",
+    summary="Manager/Admin: view portfolio aggregated analytics",
 )
 @limiter.limit("60/minute")
 async def get_portfolio_analytics(
     request: Request,
-    manager: Annotated[User, Depends(require_role(RoleEnum.manager))],
+    manager: Annotated[User, Depends(require_role(RoleEnum.manager, RoleEnum.admin))],
     db: Annotated[AsyncSession, Depends(get_db)],
 ) -> PortfolioDTO:
     try:

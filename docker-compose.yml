@@ -1,3 +1,18 @@
+# docker-compose.yml — LoanLens services
+#
+# Optional profiles:
+#   ollama   — run a local Ollama LLM container (GPU or CPU).
+#              Start with:  docker compose --profile ollama up -d
+#              Then set in backend/.env:
+#                LLM_BASE_URL=http://localhost:11434/v1
+#                LLM_MODEL=llama3.1
+#
+# If Ollama is already installed and running on the HOST machine (not in
+# Docker), point the backend to it using the host-gateway address:
+#   LLM_BASE_URL=http://host.docker.internal:11434/v1  (Docker Desktop)
+#   LLM_BASE_URL=http://172.17.0.1:11434/v1            (Linux docker bridge)
+# No extra service entry is needed in that case.
+
 services:
   postgres:
     image: postgres:16
@@ -51,6 +66,32 @@ services:
     # standalone = runs db migrate + create admin + webserver + scheduler in one process
     command: standalone
 
+  # ── Optional: Ollama LLM (start with --profile ollama) ─────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: loanlens_ollama
+    profiles: ["ollama"]
+    restart: unless-stopped
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    # GPU support (NVIDIA): uncomment the lines below and ensure the
+    # NVIDIA Container Toolkit is installed on the host.
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:11434/api/tags || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
 volumes:
   pgdata:
   airflow_logs:
+  ollama_data:

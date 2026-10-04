@@ -5,6 +5,7 @@ duplicate detection at both file and row level, and the review-queue trigger
 conditions.
 """
 import uuid
+from decimal import Decimal
 
 from app.ingestion.dedup import file_hash
 from app.ingestion.pipeline import (
@@ -200,6 +201,58 @@ def test_different_file_overlapping_period_no_duplicate_rows():
             "Overlapping transactions must produce identical raw_ids "
             "so ON CONFLICT DO NOTHING deduplicates them"
         )
+
+
+def test_balance_less_overlapping_rows_keep_content_ids():
+    """Rows retain IDs when an overlapping file has a different row offset."""
+    first = b"Txn Date,Narration,Txn Amount\n2024-01-01,Older,-50\n2024-01-02,Opening,-100\n2024-01-03,Salary,5000\n"
+    second = b"Txn Date,Narration,Txn Amount\n2023-12-31,Before,-25\n2024-01-01,Older,-50\n2024-01-02,Opening,-100\n2024-01-03,Salary,5000\n"
+
+    result1 = _run(first)
+    result2 = _run(second)
+
+    assert result1.status == STATUS_OK
+    assert result2.status == STATUS_OK
+    ids1 = {str(row["raw_id"]) for row in result1.rows}
+    ids2 = {str(row["raw_id"]) for row in result2.rows}
+    assert ids1 <= ids2
+
+
+def test_amount_parser_accepts_accounting_and_currency_noise():
+    """Heuristic parsing handles common bank-export amount decorations."""
+    raw = (
+        b'Date,Description,Amount,Dr/Cr\n'
+        b'2024-01-01,Salary,"INR 50,000.00",Cr\n'
+        b'2024-01-02,EMI,"(12,000.00)",Dr\n'
+        b'2024-01-03,ATM,"5,000.00 Dr",Dr\n'
+    )
+    result = _run(raw)
+
+    assert result.status == STATUS_OK, result.error_detail
+    assert [(row["amount"], row["txn_type"]) for row in result.rows] == [
+        (50000, "credit"),
+        (12000, "debit"),
+        (5000, "debit"),
+    ]
+
+
+def test_split_columns_tolerate_real_world_header_typo():
+    """A misspelled withdrawal header still resolves as a split statement."""
+    raw = (
+        b"Date,Description,Deposits,Withdrawls,Balance\n"
+        b'20-Aug-2020,Cash,"97,540.00",00.00,"170,542.01"\n'
+        b'20-Aug-2020,Commission,00.00,"34,108.40","136,433.61"\n'
+        b'20-Aug-2020,ATM,41.00,00.00,"136,474.61"\n'
+    )
+    result = _run(raw)
+
+    assert result.status == STATUS_OK, result.error_detail
+    assert result.confidence >= 0.70
+    assert [(row["amount"], row["txn_type"]) for row in result.rows] == [
+        (Decimal("97540"), "credit"),
+        (Decimal("34108.40"), "debit"),
+        (Decimal("41"), "credit"),
+    ]
 
 
 def test_too_few_rows():

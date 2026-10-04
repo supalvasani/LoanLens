@@ -230,7 +230,7 @@ def test_drcr_no_slash_resolved():
     mapping = classify_columns(df)
     assert mapping.txn_type_col == "DrCr"
     assert mapping.amount_pattern == "flagged"
-    assert mapping.confidence >= 0.55
+    assert mapping.confidence >= 0.70
 
 
 def test_detect_header_row_with_false_positive_preamble():

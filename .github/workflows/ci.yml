@@ -78,6 +78,7 @@ jobs:
           DB_URL: postgresql+asyncpg://postgres:admin@127.0.0.1:5432/loanlens_db
           JWT_SECRET: ci-test-secret
           REFRESH_TOKEN_SECRET: ci-test-refresh-secret
+          LLM_MOCK: "true"   # no real LLM in CI
         run: alembic upgrade head
 
       - name: Load sample raw data
@@ -94,6 +95,7 @@ jobs:
           DBT_USER: postgres
           DBT_PASSWORD: admin
           DBT_DBNAME: loanlens_db
+          LLM_MOCK: "true"   # no real LLM in CI
         run: |
           dbt seed --project-dir dbt/loanlens --profiles-dir dbt/loanlens --target dev
           dbt run --project-dir dbt/loanlens --profiles-dir dbt/loanlens --target dev
